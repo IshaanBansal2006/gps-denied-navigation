@@ -57,3 +57,22 @@ Delta velocity over window:
 ## Purpose
 
 The dataset will be used to train the neural motion prediction model.
+
+## Current Dataset Source
+
+Current source format: ROS bag
+
+File:
+- data/MH_01_easy.bag
+
+Available topics:
+- /imu0
+- /leica/position
+- /cam0/image_raw
+- /cam1/image_raw
+
+Current engineering plan:
+1. Export /imu0 to CSV
+2. Export /leica/position to CSV
+3. Derive velocity from position
+4. Build IMU-window to delta-velocity training samples

@@ -1,8 +1,15 @@
 # datasets
 data/
-
-# ros bag files
+datasets/
 *.bag
+*.zip
+*.tar
+*.gz
+
+# euroc datasets
+MH_*/
+V1_*/
+V2_*/
 
 # python
 __pycache__/
@@ -10,6 +17,10 @@ __pycache__/
 
 # logs
 *.log
+
+# env
+.venv/
+env/
 
 # vscode
 .vscode/

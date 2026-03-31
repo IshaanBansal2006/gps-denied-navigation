@@ -50,17 +50,41 @@ Planned steps:
 
 ## Current Status
 
-Project planning and system architecture design.
+Completed:
+- project documentation scaffold
+- architecture decisions
+- dataset source selection
+- initial dataset inspection
 
-# Dataset
+Current step:
+- exporting IMU and Leica ground-truth position from MH_01_easy ROS bag into CSV
 
-Download EuRoC dataset:
 
-MH_01_easy
+# Local Datasets
 
-Source:
+This folder contains large datasets that are NOT committed to the repository.
+
+Datasets used:
+### EuRoC MAV Dataset
+
+Download from:
 https://www.kaggle.com/datasets/chunai/euroc-mh-01-easy-ros-bag-dataset?resource=download
 
-Place .bag file in this folder:
-data/MH_01_easy.bag
+Sequences used:
+
+- MH_01_easy
+- (more will be added later)
+
+Expected structure:
+
+data/
+    euroc/
+        MH_01_easy/
+            mav0/
+                imu0/
+                cam0/
+                cam1/
+                state_groundtruth_estimate0/
+
+Do not commit dataset files.
 
