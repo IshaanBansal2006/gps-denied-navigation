@@ -1,0 +1,15 @@
+# datasets
+data/
+
+# ros bag files
+*.bag
+
+# python
+__pycache__/
+*.pyc
+
+# logs
+*.log
+
+# vscode
+.vscode/

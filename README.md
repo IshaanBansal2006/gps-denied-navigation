@@ -51,3 +51,16 @@ Planned steps:
 ## Current Status
 
 Project planning and system architecture design.
+
+# Dataset
+
+Download EuRoC dataset:
+
+MH_01_easy
+
+Source:
+https://www.kaggle.com/datasets/chunai/euroc-mh-01-easy-ros-bag-dataset?resource=download
+
+Place .bag file in this folder:
+data/MH_01_easy.bag
+
