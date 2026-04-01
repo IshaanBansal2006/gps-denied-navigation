@@ -50,15 +50,15 @@ Planned steps:
 
 ## Current Status
 
+Current stage: Dataset preprocessing
+
 Completed:
-- project documentation scaffold
-- architecture decisions
-- dataset source selection
-- initial dataset inspection
+- Exported IMU and Leica position from ROS bag
+- Derived velocity from Leica position
 
-Current step:
-- exporting IMU and Leica ground-truth position from MH_01_easy ROS bag into CSV
-
+Next step:
+- Align Leica-derived velocity with IMU timestamps
+- Generate training windows
 
 # Local Datasets
 
