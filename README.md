@@ -1,126 +1,132 @@
-# Neural-Aided GPS-Denied Navigation for UAVs
+## Neural-Aided GPS-Denied Navigation for UAVs
 
-## Problem
+### Project goal
 
-GPS is commonly used for UAV navigation, but GPS signals can become unreliable or unavailable in many environments such as indoors, urban canyons, and contested environments. When GPS becomes unavailable, UAVs rely on inertial measurements, which drift over time due to sensor noise and bias. This drift leads to inaccurate position estimation and degraded autonomy performance.
+Build a neural-aided inertial navigation pipeline for GPS-denied UAV navigation.
 
-## Goal
+Current scope: use fixed-length windows of IMU data as input and predict **delta velocity** \(\Delta v\) across the window. The intended next stage (not implemented here yet) is to use these learned motion estimates as pseudo-measurements in a filter (e.g., EKF) during simulated GPS outages.
 
-The goal of this project is to develop a neural-aided inertial navigation system that improves UAV navigation during GPS-denied conditions. A neural network will learn short-term motion from IMU data and provide pseudo-measurements to an Extended Kalman Filter to reduce drift.
+### Raw dataset and sensors
 
-## System Overview
+- **Source**: EuRoC `MH_01_easy` ROS bag at `data/MH_01_easy.bag`
+- **Topics used**
+  - **IMU** `/imu0` → `sensor_msgs/Imu` (model input at inference time)
+  - **Leica** `/leica/position` → `geometry_msgs/PointStamped` (ground truth used only to build labels)
 
-The system consists of the following components:
+Notes:
+- Leica is *not* an input to the model; it is used to derive velocity labels for training/evaluation.
 
-- IMU data input
-- Window-based preprocessing
-- Neural motion prediction model
-- Extended Kalman Filter
-- GPS outage simulation
+### High-level choices (so far)
 
-Pipeline:
+- **Target**: predict \(\Delta v = v_{\text{end}} - v_{\text{start}}\) per window (3D)
+- **Model**: Temporal Convolutional Network (TCN) baseline
+- **Alignment**: interpolate Leica-derived velocity onto IMU timestamps
+- **Splits**: chronological train/val/test split (to reduce leakage from overlapping windows)
+- **Normalization**: compute per-channel mean/std from train only, apply to val/test
+- **Debug workflow**: overfit a small subset before full training
 
-IMU → Window Builder → Neural Network → EKF → State Estimate
+Short decision writeups live in `docs/decisions/`.
 
-During GPS outages, the neural network will provide motion estimates to assist the EKF.
+### Preprocessing + training pipeline
 
-## Why This Matters
+All scripts use fixed paths under `data/` and write outputs under `data/processed/`.
 
-GPS-denied navigation is critical for:
+Run in order:
 
-- Autonomous drones
-- Aerospace systems
-- Defense applications
-- Indoor robotics
-- Urban navigation
+```bash
+python3 scripts/export_bag_topics.py
+python3 scripts/derive_leica_velocity.py
+python3 scripts/align_leica_to_imu.py
+python3 scripts/build_training_windows.py
+python3 scripts/split_and_normalize.py
+python3 scripts/train_tcn_subset.py
+```
 
-This project explores learning-based inertial navigation, combining classical estimation with machine learning.
+#### Step 1 — Export bag topics to CSV
 
-## Roadmap
+Script: `scripts/export_bag_topics.py`
 
-Planned steps:
+Outputs:
+- `data/processed/imu.csv`
+- `data/processed/leica_position.csv`
 
-1. Dataset loading and preprocessing
-2. IMU window generation
-3. Baseline neural model
-4. Motion prediction evaluation
-5. EKF integration
-6. GPS outage simulation
-7. Model improvements
+#### Step 2 — Derive velocity from Leica position
 
-## Current Status
+Script: `scripts/derive_leica_velocity.py`
 
-Completed:
-- exported `/imu0` and `/leica/position` from `MH_01_easy.bag`
-- derived Leica velocity from position using finite differences
-- aligned Leica-derived velocity to IMU timestamps using interpolation
-- built fixed-length IMU training windows
-- saved ML-ready arrays:
-  - `data/processed/X_windows.npy`
-  - `data/processed/y_delta_v.npy`
-- chronologically split dataset into train / validation / test
-- normalized IMU features using training-set statistics only
+Method: first-order finite differences on position (baseline).
 
-Current split outputs:
-- `data/processed/splits/X_train.npy`
-- `data/processed/splits/y_train.npy`
-- `data/processed/splits/X_val.npy`
-- `data/processed/splits/y_val.npy`
-- `data/processed/splits/X_test.npy`
-- `data/processed/splits/y_test.npy`
-- `data/processed/splits/normalization_stats.json`
+Output:
+- `data/processed/leica_velocity.csv`
 
-Training definition:
-- window length: 1 second
-- 200 IMU samples per window
-- input shape per sample: `(200, 6)`
-- target shape per sample: `(3,)`
-- target: delta velocity across the window
+#### Step 3 — Align Leica velocity to IMU timeline
 
-Next step:
-- build the first baseline TCN
-- train on the normalized chronological split
-- verify the model can overfit a small subset before full training
+Script: `scripts/align_leica_to_imu.py`
 
-# Local Datasets
+Method: linear interpolation of Leica velocity onto IMU timestamps, keeping only IMU samples inside the Leica time range.
 
-This folder contains large datasets that are NOT committed to the repository.
+Output:
+- `data/processed/imu_aligned_with_leica_velocity.csv` (IMU + `gt_vel_{x,y,z}`)
 
-Datasets used:
-### EuRoC MAV Dataset
+#### Step 4 — Build fixed-length training windows
 
-Download from:
-https://www.kaggle.com/datasets/chunai/euroc-mh-01-easy-ros-bag-dataset?resource=download
+Script: `scripts/build_training_windows.py`
 
-Sequences used:
+Defaults:
+- **Window size**: 200 samples (intended as ~1s at 200 Hz)
+- **Stride**: 1
 
-- MH_01_easy
-- (more will be added later)
+Saved outputs:
+- `data/processed/X_windows.npy` (shape \((N, 200, 6)\))
+- `data/processed/y_delta_v.npy` (shape \((N, 3)\))
+- `data/processed/window_metadata.csv`
 
-Expected structure:
+Feature order in `X_windows.npy`:
+- `gyro_x, gyro_y, gyro_z, accel_x, accel_y, accel_z`
 
-data/
-    euroc/
-        MH_01_easy/
-            mav0/
-                imu0/
-                cam0/
-                cam1/
-                state_groundtruth_estimate0/
+#### Step 5 — Chronological split + train-only normalization
 
-Do not commit dataset files.
+Script: `scripts/split_and_normalize.py`
 
-## Current Training Definition
+Outputs:
+- `data/processed/splits/{X,y}_{train,val,test}.npy`
+- `data/processed/splits/normalization_stats.json` (ratios + feature order + train mean/std)
 
-Window length:
-- 1 second
-- 200 IMU samples
+### Baseline model
 
-Model input:
-- IMU window of shape `(200, 6)`
+- **Model code**: `src/models/tcn.py` (`TCNRegressor`)
+- **Training sanity check**: `scripts/train_tcn_subset.py` (overfits a small subset to confirm the pipeline is wired correctly)
 
-Model target:
-- delta velocity across the window:
-  - Δvx
-  - Δvy
-  - Δvz
+### Current status
+
+Working end-to-end:
+- export → label derivation → alignment → window building → splitting/normalization
+- baseline TCN implementation
+- tiny-subset overfit test (sanity check) succeeds
+
+Not done yet:
+- full training run + evaluation on the full dataset split
+- saving checkpoints/metrics/plots in a repeatable way
+- EKF/filter integration
+
+### Next steps
+
+- add a full training script (train + val, checkpoint best model)
+- evaluate on test split (MSE/MAE, per-axis errors)
+- add simple plots (learning curves, predicted vs target scatter, error histograms)
+- iterate on labels if needed (smoothing / better differentiation), then revisit model architecture
+
+### Decisions
+
+- `docs/decisions/001-delta-velocity-target.md`
+- `docs/decisions/002-export-bag-to-csv.md`
+- `docs/decisions/003-derive-velocity-from-leica-position.md`
+- `docs/decisions/004-use-finite-difference-for-first-velocity-derivation.md`
+- `docs/decisions/005-use-interpolation-for-leica-to-imu-alignment.md`
+
+### Repo layout
+
+- `scripts/`: preprocessing + training entrypoints
+- `src/`: model code
+- `docs/decisions/`: short rationale notes
+- `data/`: raw + processed artifacts (not all files are checked in)
