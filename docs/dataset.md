@@ -121,3 +121,22 @@ Leica position timestamps are spaced at approximately 0.046 to 0.05 s, indicatin
 ### Consequence
 
 Because direct velocity ground truth is not available in the ROS bag, velocity will be derived from Leica position using timestamped finite differences.
+
+## IMU / Ground-Truth Alignment
+
+Leica-derived velocity is aligned to the IMU timeline using linear interpolation.
+
+Input files:
+- `data/processed/imu.csv`
+- `data/processed/leica_velocity.csv`
+
+Output file:
+- `data/processed/imu_aligned_with_leica_velocity.csv`
+
+Result:
+Each retained IMU row now includes:
+- `gt_vel_x`
+- `gt_vel_y`
+- `gt_vel_z`
+
+Only IMU timestamps inside the Leica velocity time range are kept.
