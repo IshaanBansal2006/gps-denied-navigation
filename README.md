@@ -50,15 +50,37 @@ Planned steps:
 
 ## Current Status
 
-Current stage: Dataset preprocessing
-
 Completed:
-- Exported IMU and Leica position from ROS bag
-- Derived velocity from Leica position
+- exported `/imu0` and `/leica/position` from `MH_01_easy.bag`
+- derived Leica velocity from position using finite differences
+- aligned Leica-derived velocity to IMU timestamps using interpolation
+- built fixed-length IMU training windows
+- saved ML-ready arrays:
+  - `data/processed/X_windows.npy`
+  - `data/processed/y_delta_v.npy`
+- chronologically split dataset into train / validation / test
+- normalized IMU features using training-set statistics only
+
+Current split outputs:
+- `data/processed/splits/X_train.npy`
+- `data/processed/splits/y_train.npy`
+- `data/processed/splits/X_val.npy`
+- `data/processed/splits/y_val.npy`
+- `data/processed/splits/X_test.npy`
+- `data/processed/splits/y_test.npy`
+- `data/processed/splits/normalization_stats.json`
+
+Training definition:
+- window length: 1 second
+- 200 IMU samples per window
+- input shape per sample: `(200, 6)`
+- target shape per sample: `(3,)`
+- target: delta velocity across the window
 
 Next step:
-- Align Leica-derived velocity with IMU timestamps
-- Generate training windows
+- build the first baseline TCN
+- train on the normalized chronological split
+- verify the model can overfit a small subset before full training
 
 # Local Datasets
 
@@ -88,3 +110,17 @@ data/
 
 Do not commit dataset files.
 
+## Current Training Definition
+
+Window length:
+- 1 second
+- 200 IMU samples
+
+Model input:
+- IMU window of shape `(200, 6)`
+
+Model target:
+- delta velocity across the window:
+  - Δvx
+  - Δvy
+  - Δvz
