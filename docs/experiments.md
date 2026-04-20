@@ -114,51 +114,54 @@ Artifacts:
 - `results/tcn_improved/test_metrics.json`
 - `checkpoints/tcn_improved.pt`
 
-## Experiment: TCN Multi-Sequence (6 sequences)
+## Experiment: TCN Multi-Sequence (7 sequences, corrected splits)
 
 Configuration:
 - window size: 200
 - stride: 25
 - features: gyro_x, gyro_y, gyro_z, accel_x, accel_y, accel_z
 - target: delta velocity
-- epochs: 50 (early stopping patience=10)
-- batch size: 64
+- epochs: 100 (early stopping patience=20)
+- batch size: 32
+- learning rate: 3e-4 with ReduceLROnPlateau (factor=0.5, patience=8)
 - optimizer: Adam, weight_decay=1e-4
 - loss: MSE
-- model: channel_sizes=[32,64,64], dropout=0.2
+- model: channel_sizes=[16,32,32], dropout=0.3
 
-Split:
+Split (cross-sequence, both environments in train):
 - train: MH_01_easy (1465), MH_02_easy (1204), MH_03_medium (1052), V1_01_easy (1150), V1_02_medium (677) → 5548 windows
 - val: MH_04_difficult (790 windows)
 - test: MH_05_difficult (888 windows)
 
+Sequences processed: all 7 available EuRoC bags extracted via ROS Noetic rosbag.
+MH_01–05 from machine_hall, V1_01–02 from vicon_room1.
+
 Results:
-- best epoch: 3
-- best val loss: 0.10596438
-- test MSE: 0.36955845
-- test MAE: 0.43398896
+- best epoch: 11
+- best val loss: 0.10577
+- test MSE: 0.08914
+- test MAE: 0.21136
 
 Axis-wise:
-- mse_x: 0.38278913
-- mse_y: 0.60909671
-- mse_z: 0.11678942
-- mae_x: 0.47371766
-- mae_y: 0.57124698
-- mae_z: 0.25700217
+- mse_x: 0.09958
+- mse_y: 0.11557
+- mse_z: 0.05227
+- mae_x: 0.23029
+- mae_y: 0.23584
+- mae_z: 0.16796
 
 Notes:
-- NOTE: NOT directly comparable to prior runs — val/test sequences are "difficult" (MH_04, MH_05),
-  which have larger delta velocities and harder flight dynamics by design
-- Split was adjusted from original plan (V1_02 moved to train; MH_05_difficult used as test)
-  to avoid cross-environment distribution shift masking model quality
-- Train windows increased ~3.8x (1465 → 5548) but best epoch regressed to 3 (from 4)
-- Large val→test gap (0.106 → 0.370) indicates model does not generalize from MH_04 difficulty
-  to MH_05 difficulty — different maneuver patterns within "difficult" tier
-- Y-axis error is worst (mse_y=0.609), suggesting poor lateral motion generalization on aggressive flights
-- Absolute MSE numbers inflated by difficult sequence scale — compare to dead reckoning baseline next
-
-Next step: implement IMU dead reckoning baseline to establish whether TCN MSE (even at 0.37)
-beats uncorrected IMU integration on difficult sequences.
+- NOT directly comparable to prior runs — val/test use MH_04/05 (difficult), prior runs used a
+  chronological split of MH_01 only. Difficult sequences have genuinely different dynamics.
+- Zero-prediction baseline MSE on this test split: 0.09027 (our model: 0.08914 — only 1.2% better)
+- Best epoch improved from 4 (single-seq) to 11 (multi-seq), confirming reduced overfitting
+- Absolute MSE improvement over the same test set zero-predictor is marginal — model is not yet
+  learning meaningful velocity change structure across sequences
+- Root cause: delta_v labels are near-zero mean, finite-difference noise dominates signal
+- Prior "improved" run test MSE (0.04794) was actually WORSE than its zero-pred baseline (0.03842),
+  so the multi-sequence run is the first one that at least doesn't regress below zero-prediction
+- Next lever: label smoothing or use GT velocity directly as auxiliary supervision; alternatively
+  switch to predicting cumulative velocity rather than delta_v
 
 Artifacts:
 - `results/tcn_multi/loss_history.json`
