@@ -121,15 +121,35 @@ def compute_metrics(
     axis_mse = torch.mean(diff ** 2, dim=0).tolist()
     axis_mae = torch.mean(torch.abs(diff), dim=0).tolist()
 
+    # R² per axis: 1 - MSE / Var(y). Negative means worse than zero predictor.
+    target_var = targets_cat.var(dim=0)
+    axis_r2 = [
+        (1.0 - axis_mse[i] / target_var[i].item()) if target_var[i].item() > 1e-8 else float("nan")
+        for i in range(3)
+    ]
+    r2_mean = float(sum(v for v in axis_r2 if not (v != v)) / max(1, sum(1 for v in axis_r2 if v == v)))
+
+    # Per-axis Pearson correlation
+    def pearson(a: torch.Tensor, b: torch.Tensor) -> float:
+        a_c = a - a.mean()
+        b_c = b - b.mean()
+        denom = (a_c.norm() * b_c.norm()).item()
+        return (a_c @ b_c).item() / denom if denom > 1e-8 else 0.0
+
+    axis_corr = [pearson(preds_cat[:, i], targets_cat[:, i]) for i in range(3)]
+
+    # Zero-predictor baseline MSE (= variance of targets)
+    zero_mse = torch.mean(targets_cat ** 2).item()
+
     return {
         "mse": mse,
         "mae": mae,
-        "mse_x": axis_mse[0],
-        "mse_y": axis_mse[1],
-        "mse_z": axis_mse[2],
-        "mae_x": axis_mae[0],
-        "mae_y": axis_mae[1],
-        "mae_z": axis_mae[2],
+        "r2_mean": r2_mean,
+        "r2_x": axis_r2[0], "r2_y": axis_r2[1], "r2_z": axis_r2[2],
+        "corr_x": axis_corr[0], "corr_y": axis_corr[1], "corr_z": axis_corr[2],
+        "zero_predictor_mse": zero_mse,
+        "mse_x": axis_mse[0], "mse_y": axis_mse[1], "mse_z": axis_mse[2],
+        "mae_x": axis_mae[0], "mae_y": axis_mae[1], "mae_z": axis_mae[2],
     }
 
 

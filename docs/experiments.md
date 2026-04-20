@@ -167,3 +167,27 @@ Artifacts:
 - `results/tcn_multi/loss_history.json`
 - `results/tcn_multi/test_metrics.json`
 - `checkpoints/tcn_multi.pt`
+## Experiment: IMU Dead Reckoning Baseline (MH_05_difficult)
+
+Method: integrate (accel - static_bias) over time without attitude correction.
+
+Results on MH_05_difficult:
+- vel_error_at_5s: 49.2 m/s
+- vel_error_at_30s: 298.1 m/s
+- vel_error_at_60s: 606.2 m/s
+- window delta_v MSE: 34.519
+- window delta_v MAE: 3.588
+- window delta_v R²: -628.7 (catastrophic)
+
+Zero-predictor MSE on same test set: 0.090
+TCN MSE on same test set: 0.089
+TCN vs dead reckoning: 387x better on window delta_v MSE.
+
+Notes:
+- Catastrophic drift is due to gravity subtraction without attitude tracking
+- Naive bias estimation from first N samples invalid when drone is already in motion
+- EKF must include attitude state to properly rotate and subtract gravity
+- Even though TCN R² ≈ 0, it is 387x better than uncorrected IMU integration
+
+Artifacts:
+- `results/dead_reckoning/MH_05_difficult_metrics.json`
