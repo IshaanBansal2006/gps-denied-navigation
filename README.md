@@ -1,132 +1,99 @@
+> ⚠️ **Work in Progress** — Active research project. Pipeline, model architecture, and results are evolving. See `docs/experiments.md` for the current state.
+
+---
+
 ## Neural-Aided GPS-Denied Navigation for UAVs
 
-### Project goal
+Build a navigation system that keeps a UAV accurately positioned when GPS is unavailable — jammed, spoofed, indoors, or in contested airspace. Inspired by Shield.AI's Hivemind principle: zero external dependencies.
 
-Build a neural-aided inertial navigation pipeline for GPS-denied UAV navigation.
+**Approach**: IMU windows → neural network (TCN) predicts delta velocity → EKF fuses predictions as pseudo-measurements during GPS outages.
 
-Current scope: use fixed-length windows of IMU data as input and predict **delta velocity** \(\Delta v\) across the window. The intended next stage (not implemented here yet) is to use these learned motion estimates as pseudo-measurements in a filter (e.g., EKF) during simulated GPS outages.
+---
 
-### Raw dataset and sensors
+### Pipeline
 
-- **Source**: EuRoC `MH_01_easy` ROS bag at `data/MH_01_easy.bag`
-- **Topics used**
-  - **IMU** `/imu0` → `sensor_msgs/Imu` (model input at inference time)
-  - **Leica** `/leica/position` → `geometry_msgs/PointStamped` (ground truth used only to build labels)
-
-Notes:
-- Leica is *not* an input to the model; it is used to derive velocity labels for training/evaluation.
-
-### High-level choices (so far)
-
-- **Target**: predict \(\Delta v = v_{\text{end}} - v_{\text{start}}\) per window (3D)
-- **Model**: Temporal Convolutional Network (TCN) baseline
-- **Alignment**: interpolate Leica-derived velocity onto IMU timestamps
-- **Splits**: chronological train/val/test split (to reduce leakage from overlapping windows)
-- **Normalization**: compute per-channel mean/std from train only, apply to val/test
-- **Debug workflow**: overfit a small subset before full training
-
-Short decision writeups live in `docs/decisions/`.
-
-### Preprocessing + training pipeline
-
-All scripts use fixed paths under `data/` and write outputs under `data/processed/`.
-
-Run in order:
+Run from repo root in order:
 
 ```bash
-python3 scripts/export_bag_topics.py
-python3 scripts/derive_leica_velocity.py
-python3 scripts/align_leica_to_imu.py
-python3 scripts/build_training_windows.py
-python3 scripts/split_and_normalize.py
-python3 scripts/train_tcn_subset.py
+# Step 1 — Process each EuRoC sequence (requires ROS Python for bag export)
+python3 scripts/process_sequence.py data/raw/MH_01_easy.bag MH_01_easy
+python3 scripts/process_sequence.py data/raw/MH_02_easy.bag MH_02_easy
+python3 scripts/process_sequence.py data/raw/MH_03_medium.bag MH_03_medium
+python3 scripts/process_sequence.py data/raw/V1_01_easy.bag V1_01_easy
+python3 scripts/process_sequence.py data/raw/MH_04_difficult.bag MH_04_difficult
+python3 scripts/process_sequence.py data/raw/V1_02_medium.bag V1_02_medium
+
+# Step 2 — Assemble dataset (plain Python 3)
+python3 scripts/build_dataset.py
+
+# Step 3 — Train
+python3 scripts/train_tcn_full.py
+
+# Step 4 — Visualise
+python3 scripts/plot_loss_curves.py
 ```
 
-#### Step 1 — Export bag topics to CSV
+> `process_sequence.py` skips steps if outputs already exist — safe to re-run.
 
-Script: `scripts/export_bag_topics.py`
+---
 
-Outputs:
-- `data/processed/imu.csv`
-- `data/processed/leica_position.csv`
+### Architecture
 
-#### Step 2 — Derive velocity from Leica position
+```
+EuRoC bags (MH_01–04, V1_01–02)
+  → per-sequence: imu.csv, leica_velocity.csv, imu_aligned.csv   (process_sequence.py)
+  → per-sequence: X_windows.npy (N, 200, 6), y_delta_v.npy (N, 3)
+  → data/splits/{X,y}_{train,val,test}.npy                       (build_dataset.py)
+  → TCNRegressor  →  Δv (3D)                                     (train_tcn_full.py)
+```
 
-Script: `scripts/derive_leica_velocity.py`
+**Model** (`src/models/tcn.py`): Stacked causal dilated conv blocks with residual connections. Input `(batch, 200, 6)` → final time-step embedding → linear head → Δv (3D).
 
-Method: first-order finite differences on position (baseline).
+**Labels**: `delta_v = vel[end] - vel[start]` using Leica/Vicon-derived velocity. Ground truth is never a model input at inference.
 
-Output:
-- `data/processed/leica_velocity.csv`
+**Split** (sequence-based, no leakage):
+| Split | Sequences | Purpose |
+|---|---|---|
+| Train | MH_01, MH_02, MH_03, V1_01 | Mixed difficulty + environments |
+| Val | MH_04 | Harder MH dynamics |
+| Test | V1_02 | Cross-environment generalization |
 
-#### Step 3 — Align Leica velocity to IMU timeline
+---
 
-Script: `scripts/align_leica_to_imu.py`
+### Current Results
 
-Method: linear interpolation of Leica velocity onto IMU timestamps, keeping only IMU samples inside the Leica time range.
+| Run | Config | Best val epoch | Val loss | Test MSE | Test MAE |
+|---|---|---|---|---|---|
+| Baseline | stride=1, [32,64,64], dropout=0.1 | 1 | 0.04398 | 0.05012 | 0.16644 |
+| Improved | stride=25, [16,32,32], dropout=0.3 | 4 | 0.03842 | 0.04794 | 0.15809 |
+| Multi-seq | stride=25, [32,64,64], dropout=0.2 | TBD | TBD | TBD | TBD |
 
-Output:
-- `data/processed/imu_aligned_with_leica_velocity.csv` (IMU + `gt_vel_{x,y,z}`)
+---
 
-#### Step 4 — Build fixed-length training windows
+### Roadmap
 
-Script: `scripts/build_training_windows.py`
+- [x] Single-sequence TCN baseline
+- [x] Stride/regularization improvements
+- [x] Multi-sequence pipeline
+- [ ] Multi-sequence training (in progress)
+- [ ] IMU-only dead reckoning baseline
+- [ ] EKF (velocity-state, from scratch)
+- [ ] Neural-aided EKF with simulated GPS outages
+- [ ] Evaluation suite (drift vs. outage duration)
+- [ ] ONNX export for hardware deployment
 
-Defaults:
-- **Window size**: 200 samples (intended as ~1s at 200 Hz)
-- **Stride**: 1
+---
 
-Saved outputs:
-- `data/processed/X_windows.npy` (shape \((N, 200, 6)\))
-- `data/processed/y_delta_v.npy` (shape \((N, 3)\))
-- `data/processed/window_metadata.csv`
+### Key Numbers
 
-Feature order in `X_windows.npy`:
-- `gyro_x, gyro_y, gyro_z, accel_x, accel_y, accel_z`
-
-#### Step 5 — Chronological split + train-only normalization
-
-Script: `scripts/split_and_normalize.py`
-
-Outputs:
-- `data/processed/splits/{X,y}_{train,val,test}.npy`
-- `data/processed/splits/normalization_stats.json` (ratios + feature order + train mean/std)
-
-### Baseline model
-
-- **Model code**: `src/models/tcn.py` (`TCNRegressor`)
-- **Training sanity check**: `scripts/train_tcn_subset.py` (overfits a small subset to confirm the pipeline is wired correctly)
-
-### Current status
-
-Working end-to-end:
-- export → label derivation → alignment → window building → splitting/normalization
-- baseline TCN implementation
-- tiny-subset overfit test (sanity check) succeeds
-
-Not done yet:
-- full training run + evaluation on the full dataset split
-- saving checkpoints/metrics/plots in a repeatable way
-- EKF/filter integration
-
-### Next steps
-
-- add a full training script (train + val, checkpoint best model)
-- evaluate on test split (MSE/MAE, per-axis errors)
-- add simple plots (learning curves, predicted vs target scatter, error histograms)
-- iterate on labels if needed (smoothing / better differentiation), then revisit model architecture
+| Parameter | Value |
+|---|---|
+| IMU rate | 200 Hz |
+| Window | 200 samples = 1 s |
+| Stride | 25 |
+| Input | gyro_x/y/z, accel_x/y/z |
+| Output | Δv (3D, m/s) |
 
 ### Decisions
 
-- `docs/decisions/001-delta-velocity-target.md`
-- `docs/decisions/002-export-bag-to-csv.md`
-- `docs/decisions/003-derive-velocity-from-leica-position.md`
-- `docs/decisions/004-use-finite-difference-for-first-velocity-derivation.md`
-- `docs/decisions/005-use-interpolation-for-leica-to-imu-alignment.md`
-
-### Repo layout
-
-- `scripts/`: preprocessing + training entrypoints
-- `src/`: model code
-- `docs/decisions/`: short rationale notes
-- `data/`: raw + processed artifacts (not all files are checked in)
+Short rationale notes live in `docs/decisions/` (001–010). Read before changing the label pipeline, model target, or split strategy.
