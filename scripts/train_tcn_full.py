@@ -151,9 +151,9 @@ def main() -> None:
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
     results_dir.mkdir(parents=True, exist_ok=True)
 
-    epochs = 50
-    batch_size = 64
-    learning_rate = 1e-3
+    epochs = 100
+    batch_size = 32
+    learning_rate = 3e-4
 
     x_train, y_train, x_val, y_val, x_test, y_test = load_split_data(split_dir)
 
@@ -172,13 +172,16 @@ def main() -> None:
     model = TCNRegressor(
         input_channels=6,
         output_dim=3,
-        channel_sizes=[32, 64, 64],
+        channel_sizes=[16, 32, 32],
         kernel_size=3,
-        dropout=0.2,
+        dropout=0.3,
     ).to(device)
 
     criterion = nn.MSELoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=1e-4)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer, mode="min", factor=0.5, patience=8, min_lr=1e-6
+    )
 
     history = {
         "train_loss": [],
@@ -187,7 +190,7 @@ def main() -> None:
 
     best_val_loss = math.inf
     best_checkpoint_path = checkpoint_dir / "tcn_multi.pt"
-    early_stop_patience = 10
+    early_stop_patience = 20
     epochs_no_improve = 0
 
     for epoch in range(1, epochs + 1):
@@ -243,6 +246,8 @@ def main() -> None:
             f"Val Loss: {val_loss:.8f}"
             + (" | saved best" if improved else "")
         )
+
+        scheduler.step(val_loss)
 
         if epochs_no_improve >= early_stop_patience:
             print(f"Early stopping: no val improvement for {early_stop_patience} epochs.")
