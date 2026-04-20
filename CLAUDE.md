@@ -51,11 +51,16 @@ Current config: `channel_sizes=[16,32,32]`, `kernel_size=3`, `dropout=0.3`, Adam
 | Improved (stride=25) | MH_01 only | 1465 | 4 | 0.03842 | 0.04794 | 0.15809 |
 | Multi-seq ⚠️ | MH_01–03+V1_01–02 | 5548 | 3 | 0.10596 | 0.36956 | 0.43399 |
 
-⚠️ Multi-seq test is on MH_05_difficult (aggressive maneuvers) — NOT comparable to prior easy-sequence tests.
-The higher MSE reflects harder flight dynamics, not pure regression. Y-axis error worst (mse_y=0.609).
+⚠️ **MSE IS A MISLEADING METRIC** — delta_v labels have near-zero mean, so MSE does not capture
+directional accuracy. The zero predictor (always predict 0) achieves MSE≈0.090 on MH_05_difficult;
+the model achieves 0.089 — only 1.2% better. This failure was silent in all prior runs too.
 
-**Next diagnostic**: IMU dead reckoning baseline on the same MH_05_difficult test set.
-If dead reckoning MSE >> 0.37, the TCN is still useful for EKF integration.
+Multi-seq training DID improve generalization (best epoch rose 4→11), but the metric masks it.
+
+**Critical next steps** (in order):
+1. Add R² and per-axis Pearson correlation to evaluation (measures directional accuracy)
+2. Implement dead reckoning baseline — trajectory drift is the real metric for EKF utility
+3. Move to EKF integration once dead reckoning drift is established
 
 Planned experiment progression (see `docs/experiments.md`):
 1. IMU-only dead reckoning baseline
