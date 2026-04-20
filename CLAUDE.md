@@ -45,14 +45,17 @@ Current config: `channel_sizes=[16,32,32]`, `kernel_size=3`, `dropout=0.3`, Adam
 
 ## Current status
 
-| Run | Best val epoch | Val loss | Test MSE | Test MAE |
-|---|---|---|---|---|
-| Baseline (stride=1) | 1 | 0.04398 | 0.05012 | 0.16644 |
-| Improved (stride=25) | **4** | **0.03842** | **0.04794** | **0.15809** |
+| Run | Sequences | Train windows | Best val epoch | Val loss | Test MSE | Test MAE |
+|---|---|---|---|---|---|---|
+| Baseline (stride=1) | MH_01 only | ~180k | 1 | 0.04398 | 0.05012 | 0.16644 |
+| Improved (stride=25) | MH_01 only | 1465 | 4 | 0.03842 | 0.04794 | 0.15809 |
+| Multi-seq ⚠️ | MH_01–03+V1_01–02 | 5548 | 3 | 0.10596 | 0.36956 | 0.43399 |
 
-Stride fix + regularization gave -12.7% val loss, -4.3% test MSE. Model still overfits after epoch 4.
+⚠️ Multi-seq test is on MH_05_difficult (aggressive maneuvers) — NOT comparable to prior easy-sequence tests.
+The higher MSE reflects harder flight dynamics, not pure regression. Y-axis error worst (mse_y=0.609).
 
-**Hard constraint**: MH_01_easy is only ~3 min (~36k samples). At stride=25 that's only 1465 total windows. **Biggest remaining lever: add more EuRoC bags** (MH_02–05, V1_01–03, V2_01–03).
+**Next diagnostic**: IMU dead reckoning baseline on the same MH_05_difficult test set.
+If dead reckoning MSE >> 0.37, the TCN is still useful for EKF integration.
 
 Planned experiment progression (see `docs/experiments.md`):
 1. IMU-only dead reckoning baseline
