@@ -560,3 +560,80 @@ Artifacts:
 - `results/neural_aided_ekf_v7/MH_05_difficult_results.json`
 - `scripts/neural_aided_ekf_v7.py`
 - `docs/decisions/019-velocity-only-filter-beats-strapdown-ekf.md`
+
+## Experiment: TCN v9 — Yaw Rotation + Noise + Reflection Augmentation
+
+Hypothesis: EuRoC has 6385 windows across all available sequences. Augmenting with random
+yaw rotation, Gaussian noise, and x/y reflection should expand the effective training set.
+
+Configuration:
+- augmentation: random SO(2) yaw rotation applied to all 6 IMU channels + velocity label,
+  Gaussian noise σ=0.05, random x/y axis reflection
+- augmentation applied in normalized space (per-channel z-score)
+- model/loss/sampler: identical to v7 ([16,32,32], directional loss alpha=0.6, balanced)
+
+Results:
+- best epoch: 44
+- best val loss: 1.497
+- r2_mean: +0.0046 (vs v7's +0.095 — 20x WORSE)
+- r2_x: +0.004, r2_y: -0.004, r2_z: +0.013
+- corr_x: 0.086, corr_y: -0.103, corr_z: 0.119
+
+Notes:
+- CATASTROPHIC REGRESSION. Yaw rotation destroyed all signal.
+- Root cause 1: EuRoC has fixed corridor headings. v7 exploited heading-specific correlations
+  ("this IMU pattern → roughly northward motion"). Yaw rotation destroys this prior.
+  At test time MH_05_difficult has a fixed heading distribution, so augmenting away heading
+  information is purely harmful.
+- Root cause 2: rotation was applied AFTER per-channel normalization, which is physically
+  incorrect. Per-channel means encode the absolute heading; rotating normalized data creates
+  physically inconsistent samples.
+- Lesson: augmentation must preserve train/test distribution alignment. Heading augmentation
+  violates this for EuRoC's corridor-specific dynamics.
+
+Artifacts:
+- `results/tcn_v9/loss_history.json`
+- `results/tcn_v9/test_metrics.json`
+- `checkpoints/tcn_v9.pt`
+
+## Experiment: TCN v10 — Noise-Only Augmentation
+
+Hypothesis: v9 failed because of rotation. Mild Gaussian noise (σ=0.05 in normalized space)
+alone should reduce overfitting without destroying heading-specific priors.
+
+Configuration:
+- augmentation: Gaussian noise σ=0.05 on all 6 normalized IMU channels only (no rotation, no reflection)
+- velocity labels unchanged by augmentation
+- model/loss/sampler: identical to v7 ([16,32,32], directional loss alpha=0.6, balanced)
+
+Results:
+- best epoch: 76
+- best val loss: 1.283
+- r2_mean: +0.0979 (vs v7's +0.095 — essentially flat, +3%)
+- r2_x: +0.117, r2_y: +0.094, r2_z: +0.083
+- corr_x: 0.468, corr_y: 0.354, corr_z: 0.298
+
+Notes:
+- Noise augmentation does not improve over v7 baseline — improvement is within noise.
+- Root cause: the train/val gap (train≈1.0, val≈1.28) is sequence-level distribution shift,
+  not sample-level overfitting. Noise regularization cannot fix distribution shift.
+- The model is not memorizing specific windows; it's failing to generalize to MH_04_difficult
+  because that sequence has dynamics not present in any training sequence.
+- Conclusion: data augmentation is not the right lever for this bottleneck.
+
+### Augmentation Comparison (v7 → v9 → v10)
+
+| Version | Augmentation | Best epoch | r2_mean | corr_x | corr_y | corr_z |
+|---|---|---|---|---|---|---|
+| v7 | none | 72 | +0.095 | 0.449 | 0.374 | 0.289 |
+| v9 | yaw+noise+reflection | 44 | +0.005 | 0.086 | -0.103 | 0.119 |
+| v10 | noise only (σ=0.05) | 76 | +0.098 | 0.468 | 0.354 | 0.298 |
+
+Rotation augmentation is catastrophic. Noise augmentation is neutral.
+Next lever: longer window (400 samples / 2s) for more temporal context per prediction.
+
+Artifacts:
+- `results/tcn_v10/loss_history.json`
+- `results/tcn_v10/test_metrics.json`
+- `checkpoints/tcn_v10.pt`
+- `docs/decisions/020-augmentation-findings.md`
