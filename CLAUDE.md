@@ -60,7 +60,8 @@ Current config: `channel_sizes=[16,32,32]`, `kernel_size=3`, `dropout=0.3`, Adam
 | TCN v9 (aug: rot+noise) ❌ | same 6 seqs | 6385×aug | 44 | 1.497‡ | — | +0.005 |
 | TCN v10 (aug: noise only) | same 6 seqs | 6385×aug | 76 | 1.283‡ | — | +0.098 |
 | TCN v11 (2s window) ✓ | same 6 seqs | ~5.8k | 35 | 1.230‡ | — | **+0.158** |
-| LSTM v12 (dense, 2s) ✓ | same 6 seqs | ~12k chunks | 53 | 1.200‡ | — | **+0.203** |
+| LSTM v12 (dense, 2s) ✓ | same 6 seqs | ~12k chunks | 53 | 1.200‡ | — | +0.203 |
+| LSTM v13 (vel-weighted) ✓ | same 6 seqs | ~12k chunks | 14 | 1.484‡† | — | **+0.207** |
 
 † directional loss on delta_v — not comparable to MSE-only val losses
 ‡ directional loss on normalised absolute velocity — different scale, not comparable to delta_v runs
@@ -81,16 +82,19 @@ Architecture: pre-outage = strapdown EKF+GPS; during outage = velocity-only filt
 **v11 navigation eval** (decision 022): v11 better at 5s/60s outages but v7 still wins at 30s (0.440 vs 0.485 m/s).
 VelFilter is saturated — 66% R² gain doesn't close the distribution-shift gap. v7 remains best for 30s scenario.
 
-**LSTM v12** (decision 023): r2_mean +0.203 (best yet). X/Y improved strongly (corr_x 0.543, corr_y 0.556).
-Z regressed badly (corr_z 0.253 vs v11's 0.334) — dense loss biases LSTM toward z≈mean on impulsive signal.
+**LSTM v13** (decision 024): velocity-weighted loss fixes z (corr_z 0.253→0.375, +48%). Best overall model.
+r2_mean +0.207, train/val gap 1.15x (tightest ever). X/Y within 3% of v12 peak.
+
+**LSTM v12 nav eval**: matched GPS at 5s (0.171 vs 0.172 m/s). 30s worse than v7 (0.497 vs 0.440) — z drift.
+v13 nav eval pending: better z should recover 30s.
 
 **Critical next steps** (in order):
 1. ~~Data augmentation~~ ✓ DONE (decision 020)
-2. ~~Longer window (400 samples / 2s)~~ ✓ DONE (decision 021)
-3. ~~Navigation re-eval with v11~~ ✓ DONE (decision 022)
-4. ~~LSTM with dense supervision~~ ✓ DONE — best r2_mean, but z regressed (decision 023)
-5. Navigation eval with LSTM v12 — does x/y gain outweigh z loss at 30s?
-6. End-to-end navigation loss — train on 30s trajectory drift directly
+2. ~~Longer window / TCN~~ ✓ DONE (decisions 021-022)
+3. ~~LSTM dense~~ ✓ DONE (decision 023)
+4. ~~Velocity-weighted loss~~ ✓ DONE — best model, z fixed (decision 024)
+5. **Nav eval with LSTM v13** — expect better than 0.440 m/s at 30s
+6. End-to-end navigation loss if v13 nav still worse than v7 at 30s
 
 Planned experiment progression (see `docs/experiments.md`):
 1. IMU-only dead reckoning baseline ✓
