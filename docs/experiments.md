@@ -446,3 +446,41 @@ Artifacts:
 - `results/tcn_v7/test_metrics.json`
 - `results/tcn_v7/normalization_stats.json`
 - `checkpoints/tcn_v7.pt`
+
+## Experiment: TCN v8 — Scaled Model [32,64,64]
+
+Hypothesis: with an absolute velocity target (well-defined, non-zero-mean), a larger model
+should extract more signal from the same data.
+
+Configuration:
+- model: channel_sizes=[32, 64, 64], dropout=0.2 (~4x params vs v7's [16,32,32])
+- everything else identical to v7
+
+Results:
+- best epoch: 19 (vs v7's 72 — much earlier convergence)
+- best val loss: 1.300
+- r2_mean: +0.099 (vs v7's +0.095 — +4%, marginal)
+- r2_x: +0.130 (vs v7's +0.102 — improved)
+- r2_y: +0.088 (vs v7's +0.105 — regressed)
+- r2_z: +0.080 (vs v7's +0.078 — flat)
+- corr_x: 0.499 (vs v7's 0.449 — +11%)
+- corr_y: 0.321 (vs v7's 0.374 — -14% regression)
+- corr_z: 0.290 (vs v7's 0.289 — flat)
+
+Notes:
+- Bigger model gains on x-axis but regresses on y-axis — inconsistent across axes.
+- Early stop at epoch 19 (vs 72 for v7): larger model overfits faster, same pattern as v2.
+- 6385 windows is insufficient for reliable [32,64,64] training — same data bottleneck as before.
+- v7 [16,32,32] remains best overall checkpoint. Model scaling does not reliably help at this data size.
+- Next lever: data augmentation (noise injection, rotation) OR longer window size (400 samples / 2s).
+- The EKF outage comparison with v7 is now the most important next experiment.
+
+| Version | Model | Best epoch | r2_mean | corr_x | corr_y | corr_z |
+|---|---|---|---|---|---|---|
+| v7 | [16,32,32] | 72 | +0.095 | 0.449 | 0.374 | 0.289 |
+| v8 | [32,64,64] | 19 | +0.099 | 0.499 | 0.321 | 0.290 |
+
+Artifacts:
+- `results/tcn_v8/loss_history.json`
+- `results/tcn_v8/test_metrics.json`
+- `checkpoints/tcn_v8.pt`
