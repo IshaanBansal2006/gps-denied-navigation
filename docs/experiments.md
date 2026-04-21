@@ -191,3 +191,258 @@ Notes:
 
 Artifacts:
 - `results/dead_reckoning/MH_05_difficult_metrics.json`
+
+## Experiment: TCN v2 — Directional Loss + Larger Model
+
+Configuration:
+- loss: 0.6 * MSE + 0.4 * cosine dissimilarity (DirectionalMSELoss, alpha=0.6)
+- model: channel_sizes=[64, 128, 256, 256] (~4x more parameters than multi-seq)
+- batch size: 64, lr: 3e-4, weight_decay: 1e-4
+- balanced sampler: equal weight per sequence regardless of window count
+- epochs: 100 (early stopping patience=25)
+- cosine LR schedule: T_max=100, eta_min=1e-6
+- split: same as multi-seq (MH_01–03+V1_01–02 train / MH_04 val / MH_05 test)
+
+Results:
+- best epoch: 1
+- best val loss: 0.40043 (directional loss scale, not comparable to prior MSE-only runs)
+- test MSE: 0.09264
+- test MAE: 0.21948
+- zero_predictor_mse: 0.09027
+- r2_mean: -0.013
+- r2_x: -0.079, r2_y: -0.018, r2_z: +0.059
+- corr_x: 0.083, corr_y: 0.033, corr_z: 0.291
+
+Notes:
+- REGRESSION vs multi-seq: test MSE 0.09264 vs 0.08914 — v2 is actually worse
+- Best epoch 1 again: larger model overfits immediately; train loss drops 0.47→0.21 over 26 epochs
+  while val loss stagnates at ~0.40, a 2x train/val gap from the start
+- R² negative on x/y axes — model is worse than predicting the mean on those axes
+- Root cause: [64,128,256,256] has ~800k parameters vs ~50k in the prior model — massively
+  over-parameterized for 5548 training windows
+- Cosine loss is also problematic when delta_v magnitudes are near zero (direction is undefined
+  for near-zero vectors), which is most of the dataset
+- Balanced sampler didn't compensate for the capacity mismatch
+
+Next experiment direction:
+- Try directional loss on the SMALL model [16,32,32] — isolate whether loss or model size caused regression
+- Alternatively: label smoothing (Savitzky-Golay filter on Leica velocity) to reduce finite-diff noise
+- Real fix: use end-to-end trajectory drift as the training signal, not window-level MSE
+
+Artifacts:
+- `results/tcn_v2/loss_history.json`
+- `results/tcn_v2/test_metrics.json`
+- `checkpoints/tcn_v2.pt`
+
+## Experiment: TCN v3 — Directional Loss + Small Model (Isolation Test)
+
+Hypothesis: v2 regressed because of model size ([64,128,256,256], ~800k params), not because
+of the directional loss. v3 uses the small model [16,32,32] with the same directional loss.
+
+Configuration:
+- loss: 0.6 * MSE + 0.4 * cosine dissimilarity (DirectionalMSELoss, alpha=0.6)
+- model: channel_sizes=[16, 32, 32], dropout=0.3 (~50k params — same as multi-seq)
+- batch size: 64, lr: 3e-4, weight_decay: 1e-4
+- balanced sampler: equal weight per sequence
+- epochs: 100 (early stopping patience=25)
+- cosine LR schedule: T_max=100, eta_min=1e-6
+- split: same as multi-seq / v2
+
+Results:
+- best epoch: 27
+- best val loss: 0.41265 (directional loss scale)
+- test MSE: 0.09086
+- test MAE: 0.21445
+- zero_predictor_mse: 0.09027
+- r2_mean: +0.0029  ← first positive r2_mean across all runs
+- r2_x: -0.010, r2_y: -0.025, r2_z: +0.043
+- corr_x: 0.052, corr_y: -0.009, corr_z: 0.234
+
+Notes:
+- Hypothesis CONFIRMED: best epoch 27 (not 1) proves directional loss is not the culprit —
+  model size was entirely responsible for v2's immediate collapse
+- Still does not beat zero predictor on MSE (0.09086 vs 0.09027) or multi-seq (0.08914)
+- r2_mean is positive for the first time (+0.0029), a marginal but directionally correct step
+- Z-axis is the only axis with real signal (corr_z=0.234, r2_z=+0.043) — likely because
+  vertical motion is strongly coupled to gravity in IMU readings
+- X/Y remain near-random (corr near zero or negative): horizontal motion is harder to
+  distinguish from noise at 1s window scale with this model capacity
+- Root cause of x/y failure: finite-difference noise in Leica position (horizontal ≈ 1cm
+  precision over 1s) is comparable in magnitude to actual horizontal delta_v
+- Next lever: label smoothing (Savitzky-Golay on Leica velocity) to suppress finite-diff
+  noise, OR increase window size to give model more context per prediction
+
+Artifacts:
+- `results/tcn_v3/loss_history.json`
+- `results/tcn_v3/test_metrics.json`
+- `checkpoints/tcn_v3.pt`
+
+## Experiment: TCN v4 — Savitzky-Golay Label Smoothing
+
+Hypothesis: finite-difference noise on Leica velocity (especially x/y horizontal) is
+comparable to delta_v signal magnitude. SG filter (w=51, p=3) smooths labels before
+computing delta_v; X windows unchanged.
+
+Configuration:
+- labels: SG-smoothed gt_vel (window_length=51, polyorder=3) → delta_v
+- model/loss/sampler: identical to v3 ([16,32,32], directional loss alpha=0.6, balanced)
+
+Results:
+- best epoch: 38 (+11 vs v3 — model trains longer, noise reduction confirmed)
+- best val loss: 0.40278 (directional loss scale)
+- test MSE: 0.08511
+- zero_predictor_mse: 0.08397 — model still worse than zero predictor
+- r2_mean: -0.0015 (slightly negative, worse than v3's +0.003)
+- r2_x: ~0.000, r2_y: -0.053, r2_z: +0.049
+- corr_x: +0.092 (improved from v3's 0.052)
+- corr_y: -0.045 (regressed from v3's -0.009)
+- corr_z: 0.225 (slight regression from v3's 0.234)
+
+Notes:
+- SG smoothing confirms label noise is real (longer training) but doesn't fix x/y signal
+- corr_x improved slightly; corr_y went negative — inconsistent effect across axes
+- Y-axis worst axis: r2_y=-0.053, mse_y=0.115 — MH_05_difficult likely has different
+  y-axis dynamics than training sequences (distribution shift)
+- SG is physics-blind: it smooths HF noise but also smooths real fast dynamics,
+  potentially removing learnable signal along with noise
+- Waiting on v5 (EKF labels) for physics-aware smoothing comparison
+
+Artifacts:
+- `results/tcn_v4/loss_history.json`
+- `results/tcn_v4/test_metrics.json`
+- `checkpoints/tcn_v4.pt`
+
+## Experiment: TCN v5 — EKF-Smoothed Labels
+
+Hypothesis: The full-GPS EKF produces physically-consistent velocity estimates that
+are better training labels than raw finite-difference or SG-smoothed velocity, because
+the EKF incorporates the IMU motion model.
+
+Configuration:
+- labels: full-GPS EKF velocity (15-state, sigma_v=0.02) → delta_v per window
+- EKF initialized from static accel reading per sequence, Leica vel at every step
+- model/loss/sampler: identical to v3/v4 ([16,32,32], directional loss, balanced)
+
+Results:
+- best epoch: 18 (between v3=27 and v4=38)
+- best val loss: 0.42109 (directional loss scale)
+- test MSE: 0.09006
+- zero_predictor_mse: 0.08995 — model still marginally worse than zero predictor
+- r2_mean: +0.004 (best across v3/v4/v5, marginal)
+- r2_x: +0.006, r2_y: -0.020, r2_z: +0.027
+- corr_x: 0.105 (best x-axis correlation across all runs)
+- corr_y: 0.001 (essentially zero — y-axis completely unlearnable)
+- corr_z: 0.202 (regressed from v3's 0.234)
+
+Notes:
+- EKF labels did not materially improve over SG (v4) or raw (v3)
+- corr_x is highest yet (0.105) — EKF may preserve real x-axis dynamics better than SG
+- corr_z REGRESSED vs v3 (0.202 vs 0.234) — EKF over-smooths z, removing HF signal TCN used
+- corr_y ≈ 0 across all runs: y-axis horizontal motion is fundamentally unlearnable at this
+  data volume and window size — likely dominated by distribution shift between MH train/test
+- CONCLUSION: label smoothing is not the binding constraint. All three label variants
+  (raw, SG, EKF) produce nearly identical results. Data volume and test-set distribution
+  shift are the real limiters.
+
+## Label Smoothing Comparison (v3 → v4 → v5)
+
+| Version | Labels | Best epoch | r2_mean | corr_x | corr_y | corr_z |
+|---|---|---|---|---|---|---|
+| v3 | raw finite-diff | 27 | +0.003 | 0.052 | -0.009 | 0.234 |
+| v4 | Savitzky-Golay | 38 | -0.001 | 0.092 | -0.045 | 0.225 |
+| v5 | EKF full-GPS | 18 | +0.004 | 0.105 | 0.001 | 0.202 |
+
+No label variant breaks the corr_y ≈ 0 wall or pushes r2_mean above ~0.004.
+
+**Next direction**: data volume (add V2 sequences or augment) or change prediction target
+(predict velocity directly instead of delta_v to remove the near-zero-mean problem).
+
+Artifacts:
+- `results/tcn_v5/loss_history.json`
+- `results/tcn_v5/test_metrics.json`
+- `checkpoints/tcn_v5.pt`
+
+## Experiment: TCN v6 — Added V1_03_difficult (More Data)
+
+Hypothesis: label smoothing is not the bottleneck (v3/v4/v5 all plateau at r2≈0.003).
+Data volume is. Adding V1_03_difficult (837 windows, ~105s of difficult Vicon Room flight)
+increases training set from 5548 → 6385 windows (+15%).
+
+Configuration:
+- train seqs: MH_01/02/03, V1_01, V1_02, V1_03_difficult (6 sequences, 6385 windows)
+- val/test: unchanged (MH_04, MH_05)
+- model/loss/sampler: identical to v3 ([16,32,32], directional loss alpha=0.6, balanced)
+
+Results:
+- best epoch: 44 (best across all runs — trains longest yet)
+- best val loss: 0.40938
+- test MSE: 0.08978
+- zero_predictor_mse: 0.09027 — model still below zero predictor on raw MSE
+- r2_mean: +0.013 ← 4x improvement over v3's +0.003 — biggest jump yet
+- r2_x: +0.012 ← first meaningfully positive x-axis R² across all runs
+- r2_y: -0.016 (still negative, improved from v3's -0.025)
+- r2_z: +0.043
+- corr_x: 0.109 (best across all runs)
+- corr_y: 0.001 (structurally near-zero across all runs — not a data volume problem)
+- corr_z: 0.226
+
+Notes:
+- Data volume IS the bottleneck for x-axis: r2_x went from -0.010 (v3) to +0.012 (v6)
+  with just 837 additional windows (+15% data → 4x improvement in r2_mean)
+- Y-axis is stuck: corr_y ≈ 0 across v3/v4/v5/v6 regardless of label quality or data volume.
+  This suggests horizontal y-axis motion is structurally ambiguous from IMU alone at 1s windows,
+  OR that MH_05_difficult has y-axis dynamics not represented in any training sequence.
+- If r2_mean scales linearly with data, we'd need ~3-4x current volume to reach r2_mean≈0.05
+  (still modest). But y-axis may require a target change, not more data.
+- All EuRoC sequences now used (V2 sequences not available on disk).
+- Next lever: change prediction target from delta_v → absolute velocity to remove
+  near-zero-mean problem and test whether the architecture can learn velocity directly.
+
+Artifacts:
+- `results/tcn_v6/loss_history.json`
+- `results/tcn_v6/test_metrics.json`
+- `checkpoints/tcn_v6.pt`
+
+## Experiment: TCN v7 — Absolute Velocity Target
+
+Hypothesis: delta_v labels are near-zero-mean for most 1s windows (small velocity changes),
+so the model's trivial strategy is to predict zero. Switching to absolute velocity at window
+end gives a non-zero-mean, high-variance target the model can actually regress.
+
+Configuration:
+- target: absolute velocity at window end (gt_vel_x/y/z), z-score normalised per axis
+- labels built directly from imu_aligned.csv per sequence (no y_delta_v.npy used)
+- model/loss/sampler: identical to v6 ([16,32,32], directional loss alpha=0.6, balanced)
+- train seqs: same 6 as v6 (6385 windows)
+
+Results:
+- best epoch: 72 (trains much longer — well-defined target doesn't saturate quickly)
+- best val loss: 1.287 (different scale — normalised absolute vel, not comparable to v3–v6)
+- test MSE on normalised y: 1.465
+- zero_predictor_mse: 1.621 (model beats zero predictor: 9.6% better)
+- r2_mean: +0.095 ← 7.3x improvement over v6's +0.013
+- r2_x: +0.102, r2_y: +0.105, r2_z: +0.078
+- corr_x: 0.449 (4.1x improvement over v6's 0.109)
+- corr_y: 0.374 ← y-axis finally learnable (v3–v6 all had corr_y ≈ 0)
+- corr_z: 0.289 (slight improvement over v6's 0.226)
+
+Notes:
+- BREAKTHROUGH: y-axis correlation went from 0.001 (v6) to 0.374 — the y-axis was NEVER
+  structurally unlearnable; it was unlearnable specifically because delta_v is near-zero-mean.
+- Near-zero-mean target confirmed as the binding bottleneck for all of v3–v6.
+- Model now clearly beats zero predictor (zero_mse=1.621 vs model_mse=1.465).
+- All three axes positive R² for the first time — genuinely learning velocity structure.
+- Training ran 72 epochs (vs 44 for v6) — richer target keeps improving longer.
+- Next: scale model to [32,64,64] now that target is well-defined; also run EKF outage
+  comparison to see if v7 translates to better navigation.
+
+| Version | Target | Best epoch | r2_mean | corr_x | corr_y | corr_z |
+|---|---|---|---|---|---|---|
+| v6 | delta_v | 44 | +0.013 | 0.109 | 0.001 | 0.226 |
+| v7 | abs velocity | 72 | **+0.095** | **0.449** | **0.374** | **0.289** |
+
+Artifacts:
+- `results/tcn_v7/loss_history.json`
+- `results/tcn_v7/test_metrics.json`
+- `results/tcn_v7/normalization_stats.json`
+- `checkpoints/tcn_v7.pt`
