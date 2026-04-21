@@ -77,12 +77,15 @@ Strapdown EKF during outage is harmful — attitude drift poisons IMU propagatio
 Architecture: pre-outage = strapdown EKF+GPS; during outage = velocity-only filter + TCN v7.
 (Navigation eval should be re-run with v11 checkpoint — expected improvement.)
 
+**v11 navigation eval** (decision 022): v11 better at 5s/60s outages but v7 still wins at 30s (0.440 vs 0.485 m/s).
+VelFilter is saturated — 66% R² gain doesn't close the distribution-shift gap. v7 remains best for 30s scenario.
+
 **Critical next steps** (in order):
 1. ~~Data augmentation~~ ✓ DONE — noise-only neutral, rotation catastrophic (decision 020)
-2. ~~Longer window (400 samples / 2s)~~ ✓ DONE — R² +66%, new baseline is v11 (decision 021)
-3. Re-run navigation eval with v11 checkpoint — expect better than 0.440 m/s at 30s
-4. LSTM/Transformer — maintains state across windows, can attend to arbitrarily long history
-5. End-to-end navigation loss — train directly on EKF drift
+2. ~~Longer window (400 samples / 2s)~~ ✓ DONE — R² +66%, navigation mixed (decisions 021-022)
+3. ~~Navigation re-eval with v11~~ ✓ DONE — v7 still best at 30s; filter saturated (decision 022)
+4. LSTM/Transformer — state across windows; fixes cold-start and 10s regression
+5. End-to-end navigation loss — train on 30s drift directly, not per-window MSE
 
 Planned experiment progression (see `docs/experiments.md`):
 1. IMU-only dead reckoning baseline ✓

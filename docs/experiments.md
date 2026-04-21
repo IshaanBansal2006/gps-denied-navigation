@@ -685,3 +685,33 @@ Artifacts:
 - `results/tcn_v11/normalization_stats.json`
 - `checkpoints/tcn_v11.pt`
 - `docs/decisions/021-tcn-v11-longer-window.md`
+
+## Experiment: v11 Navigation Eval — VelFilter + TCN v11 vs v7
+
+Re-ran the velocity-only filter and strapdown EKF comparison using v11 checkpoint.
+
+### Final velocity error (m/s)
+
+| Outage | v7 standalone | v11 standalone | v7 VelFilter | v11 VelFilter | EKF+GPS |
+|---|---|---|---|---|---|
+| 5s  | 0.476 | **0.330** | 0.419 | **0.284** | 0.172 |
+| 10s | 0.908 | 1.346     | 1.163 | 1.315     | 0.328 |
+| 30s | **0.501** | 0.546 | **0.440** | 0.485 | 0.104 |
+| 60s | 0.843 | **0.740** | 0.816 | **0.769** | 0.229 |
+
+Mean@30s: v7 standalone=0.974, v11 standalone=0.973 (flat); v7 VelFilter=0.962, v11 VelFilter=0.955 (−0.7%)
+
+Notes:
+- v11 wins at 5s and 60s; v7 wins at 10s and 30s (target scenario).
+- At 30s VelFilter: v11 is 10% WORSE than v7 (0.485 vs 0.440).
+- Root cause: filter saturation. VelFilter already smooths per-window noise effectively.
+  66% R² improvement doesn't reduce the dominant error (sequence-level distribution shift).
+- v11 cold start: 2s before first prediction (400-sample window), vs 1s for v7.
+- v7 remains best checkpoint for the 30s GPS-outage scenario.
+- Closing the remaining gap (0.440 → 0.104 m/s) requires changing the filter architecture
+  or training directly on navigation loss, not improving per-window TCN accuracy.
+
+Artifacts:
+- `results/neural_aided_ekf_v11/MH_05_difficult_results.json`
+- `scripts/neural_aided_ekf_v11.py`
+- `docs/decisions/022-v11-navigation-eval.md`
