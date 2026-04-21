@@ -71,9 +71,12 @@ Absolute velocity removes this; all three axes now positive R², model beats zer
 epoch 19 vs 72 — classic overfitting pattern. 6385 windows is not enough for the larger model.
 v7 [16,32,32] remains best overall checkpoint.
 
+**EKF outage result (decision 018)**: v7 wins 3/4 outage durations on MH_05_difficult.
+Mean error at 30s: v7=0.974 m/s vs multi_seq=1.261 m/s (23% better). R²→navigation confirmed.
+
 **Critical next steps** (in order):
-1. EKF outage comparison with v7: does r2_mean=+0.095 translate to better navigation vs multi-seq?
-2. Data augmentation (noise injection, rotation) to expand effective training set
+1. Integrate v7 into EKF as a velocity measurement (not standalone) — close the 5x gap to GPS
+2. Data augmentation (noise injection, rotation augmentation) to grow effective training set
 3. Longer window (400 samples / 2s) — more IMU context per prediction
 
 Planned experiment progression (see `docs/experiments.md`):

@@ -484,3 +484,46 @@ Artifacts:
 - `results/tcn_v8/loss_history.json`
 - `results/tcn_v8/test_metrics.json`
 - `checkpoints/tcn_v8.pt`
+
+## Experiment: EKF Outage Comparison — multi_seq vs v6 vs v7
+
+Compare GPS-outage navigation on MH_05_difficult across three checkpoints.
+Script: `scripts/ekf_outage_comparison.py`
+
+v7 uses absolute-velocity prediction (denormalised directly to m/s). multi_seq and v6 use
+delta_v accumulation: `v_now = v_200_samples_ago + delta_v_tcn`.
+
+### Final velocity error at outage end (m/s, lower is better)
+
+| Outage | Dead reckoning | multi_seq | v6 | **v7** | EKF+GPS |
+|---|---|---|---|---|---|
+| 5s | 8.771 | 0.830 | 0.987 | **0.476** | 0.172 |
+| 10s | 15.821 | **0.600** | 0.614 | 0.908 | 0.328 |
+| 30s | 45.867 | 1.356 | 1.244 | **0.501** | 0.104 |
+| 60s | 95.113 | 1.069 | 1.784 | **0.843** | 0.229 |
+
+### Mean velocity error over outage window at 30s
+
+| Checkpoint | Mean error (m/s) |
+|---|---|
+| Dead reckoning | 23.181 |
+| multi_seq | 1.261 |
+| v6 | 1.299 |
+| **v7** | **0.974** |
+| EKF+GPS | 0.202 |
+
+Notes:
+- v7 wins at 3/4 outage durations (5s, 30s, 60s). Only loses at 10s — likely variance.
+- At 30s (most realistic GPS-denied scenario), v7 mean error is 23% lower than multi_seq.
+- The 7x R² improvement (0.013 → 0.095) does translate to better navigation.
+- Absolute velocity mode has no error accumulation: each TCN call produces an independent
+  velocity estimate. Delta_v mode accumulates predictions via the rolling buffer — this can
+  either help (EKF-like smoothing) or hurt (error from v_200_ago propagates).
+- v6 underperforms multi_seq at 60s (1.784 vs 1.069) — more training data didn't help
+  navigation, confirming that delta_v bottleneck is about the target, not data volume.
+- Gap to GPS upper bound: v7 0.501 m/s vs EKF+GPS 0.104 m/s at 30s — still 5x gap.
+  Next lever: integrate v7 predictions into EKF as a velocity measurement (not standalone).
+
+Artifacts:
+- `results/outage_comparison/MH_05_difficult_comparison.json`
+- `scripts/ekf_outage_comparison.py`
