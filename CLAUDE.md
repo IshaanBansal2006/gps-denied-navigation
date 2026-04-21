@@ -49,24 +49,32 @@ Current config: `channel_sizes=[16,32,32]`, `kernel_size=3`, `dropout=0.3`, Adam
 |---|---|---|---|---|---|---|
 | Baseline (stride=1) | MH_01 only | ~180k | 1 | 0.04398 | 0.05012 | 0.16644 |
 | Improved (stride=25) | MH_01 only | 1465 | 4 | 0.03842 | 0.04794 | 0.15809 |
-| Multi-seq ⚠️ | MH_01–03+V1_01–02 | 5548 | 3 | 0.10596 | 0.36956 | 0.43399 |
+| Multi-seq (corrected) | MH_01–03+V1_01–02 train / MH_04 val / MH_05 test | 5548 | 11 | 0.10577 | 0.08914 | 0.21136 |
+| TCN v2 ❌ | same split | 5548 | 1 | 0.40043† | 0.09264 | -0.013 |
+| TCN v3 | same split | 5548 | 27 | 0.41265† | 0.09086 | +0.003 |
+| TCN v4 (SG labels) | same split | 5548 | 38 | 0.40278† | 0.08511 | -0.001 |
+| TCN v5 (EKF labels) | same split | 5548 | 18 | 0.42109† | 0.09006 | +0.004 |
+| TCN v6 (+V1_03) ✓ | +V1_03_difficult | 6385 | 44 | 0.40938† | 0.08978 | **+0.013** |
+| TCN v7 (abs vel) ✓ | same 6 seqs | 6385 | 72 | 1.287‡ | 1.465‡ | **+0.095** |
 
-⚠️ **MSE IS A MISLEADING METRIC** — delta_v labels have near-zero mean, so MSE does not capture
-directional accuracy. The zero predictor (always predict 0) achieves MSE≈0.090 on MH_05_difficult;
-the model achieves 0.089 — only 1.2% better. This failure was silent in all prior runs too.
+† directional loss on delta_v — not comparable to MSE-only val losses
+‡ directional loss on normalised absolute velocity — different scale, not comparable to delta_v runs
+Best R²: v7 (+0.095). Best corr_x: v7 (0.449). Best corr_y: v7 (0.374). Best corr_z: v7 (0.289).
+BREAKTHROUGH: switching to absolute velocity target → 7.3x R² improvement; y-axis finally learnable.
 
-Multi-seq training DID improve generalization (best epoch rose 4→11), but the metric masks it.
+**v7 verdict**: near-zero-mean delta_v was the binding bottleneck for all of v3–v6.
+Absolute velocity removes this; all three axes now positive R², model beats zero predictor.
 
 **Critical next steps** (in order):
-1. Add R² and per-axis Pearson correlation to evaluation (measures directional accuracy)
-2. Implement dead reckoning baseline — trajectory drift is the real metric for EKF utility
-3. Move to EKF integration once dead reckoning drift is established
+1. TCN v8: scale model to [32,64,64] — target is now well-defined, more capacity should help
+2. EKF outage comparison with v7: does r2_mean=+0.095 translate to better navigation vs multi-seq?
+3. If v8 improves: evaluate EKF outage with v8
 
 Planned experiment progression (see `docs/experiments.md`):
-1. IMU-only dead reckoning baseline
-2. TCN motion prediction ← current
-3. EKF with GPS
-4. Neural-aided EKF (GPS-denied mode)
+1. IMU-only dead reckoning baseline ✓
+2. TCN motion prediction ✓ (multi-seq)
+3. EKF with GPS ✓
+4. Neural-aided EKF (GPS-denied mode) ✓ (decision 015)
 
 ## Key numbers
 
@@ -76,7 +84,7 @@ Planned experiment progression (see `docs/experiments.md`):
 | Window size | 200 samples (~1 s) |
 | Stride | 25 (1465 windows from MH_01_easy) |
 | Input features | `gyro_{x,y,z}`, `accel_{x,y,z}` |
-| Output | Δv (3D, m/s) |
+| Output | absolute velocity (3D, m/s) — z-score normalised in v7+ |
 | Train/val/test | chronological split |
 
 ## Organizational Memory
