@@ -637,3 +637,51 @@ Artifacts:
 - `results/tcn_v10/test_metrics.json`
 - `checkpoints/tcn_v10.pt`
 - `docs/decisions/020-augmentation-findings.md`
+
+## Experiment: TCN v11 — Longer Window (400 samples / 2s) + Deeper TCN
+
+Hypothesis: the 3-layer v7 TCN has RF=29 samples (~0.15s). Most of the 200-sample
+window was invisible to the model. Doubling to 400 samples and adding depth to RF=253
+gives the model 8.7x more temporal context.
+
+Configuration:
+- WINDOW_SIZE: 400 (2s at 200Hz, doubled from v7's 200)
+- channel_sizes: [16, 32, 32, 32, 32, 32] (6 layers, dilations [1,2,4,8,16,32])
+- Receptive field: 253 samples (~1.26s), 63% of 2s window
+- No augmentation (noise-only was neutral in v10)
+- All other settings identical to v7
+
+Results:
+- best epoch: 35 (earlier than v7's 72 — deeper model converges faster)
+- best val loss: 1.230 (vs v7's 1.287 — 4.4% better)
+- r2_mean: +0.158 ← 66% improvement over v7's +0.095
+- r2_x: +0.150 (vs v7's +0.102 — +47%)
+- r2_y: +0.221 (vs v7's +0.105 — +110%, y-axis doubled)
+- r2_z: +0.102 (vs v7's +0.078 — +31%)
+- corr_x: 0.427 (vs v7's 0.449 — slight regression, -5%)
+- corr_y: 0.486 (vs v7's 0.374 — +30%)
+- corr_z: 0.334 (vs v7's 0.289 — +16%)
+
+Notes:
+- CLEAR WIN. Temporal context was a real bottleneck — 8.7x more RF → 66% R² improvement.
+- Y-axis benefited most: r2_y doubled. Horizontal y-axis velocity likely has temporal
+  structure (heading changes, sustained accelerations) that requires 1s+ to observe.
+- corr_x slight regression (-5%) is within noise; not statistically significant given
+  that r2_x and r2_y both improved substantially.
+- Train/val gap remains (sequence-level distribution shift) but model is genuinely
+  learning more structure across all axes.
+- New baseline: v11 (2s window, 6-layer TCN, RF=253).
+
+### Window Size / RF Comparison
+
+| Version | Window | RF | r2_mean | corr_x | corr_y | corr_z |
+|---|---|---|---|---|---|---|
+| v7 | 1s (200) | 29 | +0.095 | 0.449 | 0.374 | 0.289 |
+| v11 | 2s (400) | 253 | **+0.158** | 0.427 | **0.486** | **0.334** |
+
+Artifacts:
+- `results/tcn_v11/loss_history.json`
+- `results/tcn_v11/test_metrics.json`
+- `results/tcn_v11/normalization_stats.json`
+- `checkpoints/tcn_v11.pt`
+- `docs/decisions/021-tcn-v11-longer-window.md`

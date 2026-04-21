@@ -59,24 +59,30 @@ Current config: `channel_sizes=[16,32,32]`, `kernel_size=3`, `dropout=0.3`, Adam
 | TCN v8 (large) | same 6 seqs | 6385 | 19 | 1.300‡ | — | +0.099 |
 | TCN v9 (aug: rot+noise) ❌ | same 6 seqs | 6385×aug | 44 | 1.497‡ | — | +0.005 |
 | TCN v10 (aug: noise only) | same 6 seqs | 6385×aug | 76 | 1.283‡ | — | +0.098 |
+| TCN v11 (2s window) ✓ | same 6 seqs | ~5.8k | 35 | 1.230‡ | — | **+0.158** |
 
 † directional loss on delta_v — not comparable to MSE-only val losses
 ‡ directional loss on normalised absolute velocity — different scale, not comparable to delta_v runs
-Best R²: v10 (+0.098, statistically tied with v7). Best checkpoint: **v7** (consistent, noise augmentation is neutral).
+Best R²: **v11 (+0.158)**. Best corr_y: v11 (0.486). New baseline: v11.
 
 **Augmentation verdict** (decision 020): yaw rotation catastrophic (R² collapses 20x — destroys EuRoC heading priors).
 Noise-only (σ=0.05) is neutral (+3%, within noise). Train/val gap is sequence-level distribution shift, not sample-level overfitting.
+
+**Longer window verdict** (decision 021): WINDOW_SIZE 200→400, 3-layer→6-layer (RF 29→253 samples).
+R² improved 66% (0.095→0.158). Y-axis R² doubled (0.105→0.221). Temporal context was a real bottleneck.
 
 **Best navigation system (decisions 018–019)**: velocity-only Kalman filter + TCN v7.
 Final error at 30s: **0.440 m/s** (vs 0.501 standalone TCN, vs 0.104 EKF+GPS upper bound).
 Strapdown EKF during outage is harmful — attitude drift poisons IMU propagation within 10s.
 Architecture: pre-outage = strapdown EKF+GPS; during outage = velocity-only filter + TCN v7.
+(Navigation eval should be re-run with v11 checkpoint — expected improvement.)
 
 **Critical next steps** (in order):
 1. ~~Data augmentation~~ ✓ DONE — noise-only neutral, rotation catastrophic (decision 020)
-2. Longer window (400 samples / 2s) — more IMU context per prediction → TCN v11
-3. Different architecture (LSTM/Transformer) — state across windows
-4. End-to-end navigation loss — train directly on EKF drift
+2. ~~Longer window (400 samples / 2s)~~ ✓ DONE — R² +66%, new baseline is v11 (decision 021)
+3. Re-run navigation eval with v11 checkpoint — expect better than 0.440 m/s at 30s
+4. LSTM/Transformer — maintains state across windows, can attend to arbitrarily long history
+5. End-to-end navigation loss — train directly on EKF drift
 
 Planned experiment progression (see `docs/experiments.md`):
 1. IMU-only dead reckoning baseline ✓
