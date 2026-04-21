@@ -763,3 +763,59 @@ Artifacts:
 - `results/lstm_v12/normalization_stats.json`
 - `checkpoints/lstm_v12.pt`
 - `docs/decisions/023-lstm-v12-sequence-model.md`
+
+## Experiment: LSTM v12 Navigation Eval
+
+Key finding: at 5s outage, LSTM v12 VelFilter = **0.171 m/s** — matching GPS (0.172 m/s).
+Pre-outage LSTM warmup gives perfect context at outage start; short outages don't drift.
+At 30s: 0.497 m/s (13% worse than v7's 0.440) — z-axis regression accumulates over time.
+
+| Outage | v7 VelFilter | LSTM v12 VelFilter | GPS |
+|---|---|---|---|
+| 5s  | 0.419 | **0.171** | 0.172 |
+| 10s | 1.163 | 1.162     | 0.328 |
+| 30s | **0.440** | 0.497 | 0.104 |
+| 60s | **0.816** | 0.895 | 0.229 |
+
+Artifacts: `results/neural_aided_ekf_lstm_v12/`, `scripts/neural_aided_ekf_lstm_v12.py`
+
+## Experiment: LSTM v13 — Velocity-Magnitude-Weighted Loss
+
+Hypothesis: dense loss weights static timesteps equally to dynamic ones. Most z-timesteps
+are near-zero, biasing the LSTM toward "z ≈ mean". Weight by ||v(t)|| / mean(||v||) to
+redirect gradient toward dynamic moments.
+
+Configuration:
+- VelocityWeightedDirectionalMSELoss: MSE weighted per-timestep by velocity magnitude
+- LSTM architecture identical to v12 (hidden=128, layers=2, chunk=400)
+
+Results:
+- best epoch: 14 (vs v12's 53 — faster convergence on weighted landscape)
+- best val loss: 1.484 (different scale from v12, not directly comparable)
+- r2_mean: +0.207 (vs v12's +0.203 — marginal improvement)
+- r2_z: +0.142 (vs v12's +0.050 — **+184%**, z-axis recovered)
+- corr_z: 0.375 (vs v12's 0.253 — **+48%**, best corr_z across all models)
+- corr_x: 0.528 (vs v12's 0.543 — -3%, minor regression)
+- corr_y: 0.547 (vs v12's 0.556 — -2%, minor regression)
+- train/val gap: **1.15x** (best across all models — weighted loss acts as regularizer)
+
+Notes:
+- Velocity weighting fixed z-axis without meaningfully hurting x/y.
+- Tight train/val gap: model forced to generalize on dynamic samples, can't overfit static.
+- v13 is best overall model: highest r2_mean, best corr_z, x/y within 3% of v12 peak.
+- Nav eval with v13 needed — better z should close 30s gap vs v7.
+
+### Full Model Progression
+
+| Version | r2_mean | corr_x | corr_y | corr_z | train/val gap |
+|---|---|---|---|---|---|
+| v7 TCN 1s | +0.095 | 0.449 | 0.374 | 0.289 | — |
+| v11 TCN 2s | +0.158 | 0.427 | 0.486 | 0.334 | 1.68x |
+| v12 LSTM dense | +0.203 | 0.543 | 0.556 | 0.253 | 1.69x |
+| **v13 LSTM weighted** | **+0.207** | 0.528 | 0.547 | **0.375** | **1.15x** |
+
+Artifacts:
+- `results/lstm_v13/loss_history.json`
+- `results/lstm_v13/test_metrics.json`
+- `checkpoints/lstm_v13.pt`
+- `docs/decisions/024-lstm-v13-velocity-weighted-loss.md`
