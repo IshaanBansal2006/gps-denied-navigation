@@ -65,10 +65,16 @@ BREAKTHROUGH: switching to absolute velocity target → 7.3x R² improvement; y-
 **v7 verdict**: near-zero-mean delta_v was the binding bottleneck for all of v3–v6.
 Absolute velocity removes this; all three axes now positive R², model beats zero predictor.
 
+| TCN v8 (large) | same 6 seqs | 6385 | 19 | 1.300‡ | — | +0.099 |
+
+**v8 verdict**: bigger model [32,64,64] gains +5% corr_x but loses -14% corr_y vs v7. Converges at
+epoch 19 vs 72 — classic overfitting pattern. 6385 windows is not enough for the larger model.
+v7 [16,32,32] remains best overall checkpoint.
+
 **Critical next steps** (in order):
-1. TCN v8: scale model to [32,64,64] — target is now well-defined, more capacity should help
-2. EKF outage comparison with v7: does r2_mean=+0.095 translate to better navigation vs multi-seq?
-3. If v8 improves: evaluate EKF outage with v8
+1. EKF outage comparison with v7: does r2_mean=+0.095 translate to better navigation vs multi-seq?
+2. Data augmentation (noise injection, rotation) to expand effective training set
+3. Longer window (400 samples / 2s) — more IMU context per prediction
 
 Planned experiment progression (see `docs/experiments.md`):
 1. IMU-only dead reckoning baseline ✓
