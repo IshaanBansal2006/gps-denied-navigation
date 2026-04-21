@@ -715,3 +715,51 @@ Artifacts:
 - `results/neural_aided_ekf_v11/MH_05_difficult_results.json`
 - `scripts/neural_aided_ekf_v11.py`
 - `docs/decisions/022-v11-navigation-eval.md`
+
+## Experiment: LSTM v12 — Persistent Hidden State + Dense Supervision
+
+Hypothesis: TCN predictions are stateless — each window is independent. An LSTM with
+persistent (h, c) across the sequence eliminates cold-start and provides true temporal
+memory. Dense supervision (predict velocity at all 400 timesteps per chunk) gives 400x
+more training signal per chunk.
+
+Configuration:
+- Model: 2-layer LSTM, hidden_size=128, dropout=0.3 (~264k params)
+- Chunk length: 400 (2s), stride: 200 (50% overlap)
+- Dense target: absolute velocity at every timestep (not just chunk-end)
+- Loss: DirectionalMSELoss averaged over all timesteps
+- All other settings match v11
+
+Results:
+- best epoch: 53
+- best val loss: 1.200 (vs v11's 1.230 — 2.4% better)
+- r2_mean: +0.203 ← +28% over v11, +113% over v7
+- r2_x: +0.288 (vs v11's +0.150 — +92%)
+- r2_y: +0.270 (vs v11's +0.221 — +22%)
+- r2_z: +0.050 (vs v11's +0.102 — −51%, REGRESSED)
+- corr_x: 0.543 (vs v11's 0.427 — +27%)
+- corr_y: 0.556 (vs v11's 0.486 — +14%)
+- corr_z: 0.253 (vs v11's 0.334 — −24%, REGRESSED)
+
+Notes:
+- X/Y: persistent state + dense supervision work — horizontal dynamics are sustained
+  and structured, LSTM tracks them well across the full chunk.
+- Z: significant regression. Vertical motion is impulsive (brief altitude changes, mostly
+  z≈0). Dense loss biases LSTM toward "z near mean" — hurts at actual vertical events.
+- Train/val gap unchanged (1.69x) — sequence-level distribution shift persists.
+- Overall r2_mean is best yet, but z regression may hurt navigation at 30s.
+
+### Model Progression
+
+| Version | Architecture | r2_mean | corr_x | corr_y | corr_z |
+|---|---|---|---|---|---|
+| v7 | TCN [16,32,32] 1s | +0.095 | 0.449 | 0.374 | 0.289 |
+| v11 | TCN [16,32,32,32,32,32] 2s | +0.158 | 0.427 | 0.486 | 0.334 |
+| **v12** | **LSTM 128×2 2s dense** | **+0.203** | **0.543** | **0.556** | 0.253 |
+
+Artifacts:
+- `results/lstm_v12/loss_history.json`
+- `results/lstm_v12/test_metrics.json`
+- `results/lstm_v12/normalization_stats.json`
+- `checkpoints/lstm_v12.pt`
+- `docs/decisions/023-lstm-v12-sequence-model.md`

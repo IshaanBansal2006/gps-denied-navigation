@@ -60,6 +60,7 @@ Current config: `channel_sizes=[16,32,32]`, `kernel_size=3`, `dropout=0.3`, Adam
 | TCN v9 (aug: rot+noise) ❌ | same 6 seqs | 6385×aug | 44 | 1.497‡ | — | +0.005 |
 | TCN v10 (aug: noise only) | same 6 seqs | 6385×aug | 76 | 1.283‡ | — | +0.098 |
 | TCN v11 (2s window) ✓ | same 6 seqs | ~5.8k | 35 | 1.230‡ | — | **+0.158** |
+| LSTM v12 (dense, 2s) ✓ | same 6 seqs | ~12k chunks | 53 | 1.200‡ | — | **+0.203** |
 
 † directional loss on delta_v — not comparable to MSE-only val losses
 ‡ directional loss on normalised absolute velocity — different scale, not comparable to delta_v runs
@@ -80,12 +81,16 @@ Architecture: pre-outage = strapdown EKF+GPS; during outage = velocity-only filt
 **v11 navigation eval** (decision 022): v11 better at 5s/60s outages but v7 still wins at 30s (0.440 vs 0.485 m/s).
 VelFilter is saturated — 66% R² gain doesn't close the distribution-shift gap. v7 remains best for 30s scenario.
 
+**LSTM v12** (decision 023): r2_mean +0.203 (best yet). X/Y improved strongly (corr_x 0.543, corr_y 0.556).
+Z regressed badly (corr_z 0.253 vs v11's 0.334) — dense loss biases LSTM toward z≈mean on impulsive signal.
+
 **Critical next steps** (in order):
-1. ~~Data augmentation~~ ✓ DONE — noise-only neutral, rotation catastrophic (decision 020)
-2. ~~Longer window (400 samples / 2s)~~ ✓ DONE — R² +66%, navigation mixed (decisions 021-022)
-3. ~~Navigation re-eval with v11~~ ✓ DONE — v7 still best at 30s; filter saturated (decision 022)
-4. LSTM/Transformer — state across windows; fixes cold-start and 10s regression
-5. End-to-end navigation loss — train on 30s drift directly, not per-window MSE
+1. ~~Data augmentation~~ ✓ DONE (decision 020)
+2. ~~Longer window (400 samples / 2s)~~ ✓ DONE (decision 021)
+3. ~~Navigation re-eval with v11~~ ✓ DONE (decision 022)
+4. ~~LSTM with dense supervision~~ ✓ DONE — best r2_mean, but z regressed (decision 023)
+5. Navigation eval with LSTM v12 — does x/y gain outweigh z loss at 30s?
+6. End-to-end navigation loss — train on 30s trajectory drift directly
 
 Planned experiment progression (see `docs/experiments.md`):
 1. IMU-only dead reckoning baseline ✓
