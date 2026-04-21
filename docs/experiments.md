@@ -527,3 +527,36 @@ Notes:
 Artifacts:
 - `results/outage_comparison/MH_05_difficult_comparison.json`
 - `scripts/ekf_outage_comparison.py`
+
+## Experiment: Neural-Aided EKF / Velocity-Only Filter (decision 019)
+
+Tested fusing TCN v7 into an EKF vs a simple velocity-only filter during GPS outage.
+
+### Strapdown EKF + TCN (sigma_tcn sweep)
+
+| sigma_tcn | 5s | 10s | 30s | 60s | mean@30s |
+|---|---|---|---|---|---|
+| 0.01 | 0.453 | 1.056 | 0.714 | 0.861 | 1.385 |
+| 0.05 | 2.699 | 3.016 | 3.096 | 2.825 | 3.585 |
+| 0.1 | 6.038 | 6.201 | 6.545 | 5.747 | 6.741 |
+| 0.3 | 18.479 | 19.356 | 19.180 | 16.663 | 19.095 |
+
+No sigma_tcn consistently beats standalone TCN. Root cause: attitude drift during outage
+contaminates IMU propagation faster than TCN updates can repair (~0.36 m/s per 0.125s interval
+at 30s outage due to gyro bias). The strapdown EKF is actively harmful after ~10s.
+
+### Velocity-Only Filter (constant-velocity random walk + TCN updates, no IMU)
+
+| | 5s | 10s | 30s | 60s | mean@30s |
+|---|---|---|---|---|---|
+| TCN standalone | 0.476 | 0.908 | 0.501 | 0.843 | 0.974 |
+| **VelFilter** | **0.419** | 1.163 | **0.440** | **0.816** | **0.962** |
+| EKF+GPS | 0.172 | 0.328 | 0.104 | 0.229 | 0.202 |
+
+Velocity-only filter wins at 3/4 outage durations. 12% better final at 30s, 1.2% better mean.
+No IMU propagation → no attitude drift → stable across all outage lengths.
+
+Artifacts:
+- `results/neural_aided_ekf_v7/MH_05_difficult_results.json`
+- `scripts/neural_aided_ekf_v7.py`
+- `docs/decisions/019-velocity-only-filter-beats-strapdown-ekf.md`

@@ -71,13 +71,15 @@ Absolute velocity removes this; all three axes now positive R², model beats zer
 epoch 19 vs 72 — classic overfitting pattern. 6385 windows is not enough for the larger model.
 v7 [16,32,32] remains best overall checkpoint.
 
-**EKF outage result (decision 018)**: v7 wins 3/4 outage durations on MH_05_difficult.
-Mean error at 30s: v7=0.974 m/s vs multi_seq=1.261 m/s (23% better). R²→navigation confirmed.
+**Best navigation system (decisions 018–019)**: velocity-only Kalman filter + TCN v7.
+Final error at 30s: **0.440 m/s** (vs 0.501 standalone TCN, vs 0.104 EKF+GPS upper bound).
+Strapdown EKF during outage is harmful — attitude drift poisons IMU propagation within 10s.
+Architecture: pre-outage = strapdown EKF+GPS; during outage = velocity-only filter + TCN v7.
 
 **Critical next steps** (in order):
-1. Integrate v7 into EKF as a velocity measurement (not standalone) — close the 5x gap to GPS
-2. Data augmentation (noise injection, rotation augmentation) to grow effective training set
-3. Longer window (400 samples / 2s) — more IMU context per prediction
+1. Data augmentation (noise injection, rotation) to grow effective training set → better TCN
+2. Longer window (400 samples / 2s) — more IMU context per prediction
+3. Multi-sequence outage eval to verify generalization beyond MH_05_difficult
 
 Planned experiment progression (see `docs/experiments.md`):
 1. IMU-only dead reckoning baseline ✓
