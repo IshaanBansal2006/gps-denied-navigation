@@ -819,3 +819,25 @@ Artifacts:
 - `results/lstm_v13/test_metrics.json`
 - `checkpoints/lstm_v13.pt`
 - `docs/decisions/024-lstm-v13-velocity-weighted-loss.md`
+
+## Experiment: LSTM v13 Navigation Eval
+
+Ran velocity-only filter + strapdown EKF comparison with lstm_v13.pt on MH_05_difficult.
+
+| Outage | v7 VelFilter | v12 VelFilter | **v13 VelFilter** | GPS |
+|---|---|---|---|---|
+| 5s  | 0.419 | **0.171** | 0.354 | 0.172 |
+| 10s | 1.163 | 1.162 | 1.306 | 0.328 |
+| 30s | 0.440 | 0.497 | **0.449** | 0.104 |
+| 60s | 0.816 | 0.895 | **0.831** | 0.229 |
+| mean@30s | 0.962 | 0.954 | **0.913** | 0.202 |
+
+Notes:
+- v13 best by mean@30s (0.913, 5% better than v7). 30s final essentially tied with v7 (0.449 vs 0.440).
+- v12 still best at 5s (0.171, matched GPS) — fresh state + no z accumulation.
+- 10s regression persists across all LSTM variants — transition zone between fresh state and settled filter.
+- 30s final error stuck at ~0.440-0.499 across all models since v7. Per-step MSE has saturated.
+- Remaining gap to GPS (0.449 vs 0.104) is structural: sequence-level distribution shift.
+- Next lever: end-to-end navigation loss or more diverse training data.
+
+Artifacts: `results/neural_aided_ekf_lstm_v13/`, `docs/decisions/025-lstm-v13-navigation-eval.md`
