@@ -88,13 +88,21 @@ r2_mean +0.207, train/val gap 1.15x (tightest ever). X/Y within 3% of v12 peak.
 **LSTM v12 nav eval**: matched GPS at 5s (0.171 vs 0.172 m/s). 30s worse than v7 (0.497 vs 0.440) — z drift.
 v13 nav eval pending: better z should recover 30s.
 
+**v13 nav eval** (decision 025): best mean@30s = 0.913 m/s (5% better than v7). 30s final = 0.449 (tied with v7).
+Per-step MSE improvements have saturated. 30s gap to GPS (0.449 vs 0.104) is structural distribution shift.
+
+**Best systems by scenario:**
+- 5s outage: LSTM v12 VelFilter (0.171 m/s, matched GPS)
+- 30s final: v7 TCN (0.440) ≈ v13 LSTM (0.449)
+- 30s mean: v13 LSTM (0.913)
+- Simplest deployment: v7 TCN (stateless, no warmup)
+
 **Critical next steps** (in order):
-1. ~~Data augmentation~~ ✓ DONE (decision 020)
-2. ~~Longer window / TCN~~ ✓ DONE (decisions 021-022)
-3. ~~LSTM dense~~ ✓ DONE (decision 023)
-4. ~~Velocity-weighted loss~~ ✓ DONE — best model, z fixed (decision 024)
-5. **Nav eval with LSTM v13** — expect better than 0.440 m/s at 30s
-6. End-to-end navigation loss if v13 nav still worse than v7 at 30s
+1. ~~Data augmentation~~ ✓ (decision 020)
+2. ~~Longer window / TCN~~ ✓ (decisions 021-022)
+3. ~~LSTM dense + velocity-weighted~~ ✓ (decisions 023-025)
+4. **End-to-end navigation loss** — train on 30s drift directly; only lever left at this data volume
+5. Sequence-level adaptation — fine-tune LSTM on pre-outage GPS-aided velocity in real-time
 
 Planned experiment progression (see `docs/experiments.md`):
 1. IMU-only dead reckoning baseline ✓
