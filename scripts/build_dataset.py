@@ -32,7 +32,7 @@ BAG_ROOTS = [
 ]
 
 SPLIT_CONFIG: dict[str, list[str]] = {
-    "train": ["MH_01_easy", "MH_02_easy", "MH_03_medium", "V1_01_easy", "V1_02_medium"],
+    "train": ["MH_01_easy", "MH_02_easy", "MH_03_medium", "V1_01_easy", "V1_02_medium", "V1_03_difficult"],
     "val":   ["MH_04_difficult"],
     "test":  ["MH_05_difficult"],
 }
