@@ -1,0 +1,45 @@
+{
+  "seq": "MH_01_easy",
+  "results": [
+    {
+      "outage_s": 5,
+      "outage_samples": 1000,
+      "final_vel_error_dr": 31.279994464665656,
+      "final_vel_error_tcn": 0.7442871462958838,
+      "final_vel_error_ekf_gps": 0.3102315413927619,
+      "mean_vel_error_dr": 15.702471390160541,
+      "mean_vel_error_tcn": 0.4907699812378324,
+      "mean_vel_error_ekf_gps": 0.20845072261589642
+    },
+    {
+      "outage_s": 10,
+      "outage_samples": 2000,
+      "final_vel_error_dr": 62.88188914752969,
+      "final_vel_error_tcn": 0.7514070330526663,
+      "final_vel_error_ekf_gps": 0.2758472553247573,
+      "mean_vel_error_dr": 31.48390325608136,
+      "mean_vel_error_tcn": 0.5909186630703519,
+      "mean_vel_error_ekf_gps": 0.2294896968501371
+    },
+    {
+      "outage_s": 30,
+      "outage_samples": 6000,
+      "final_vel_error_dr": 186.6934875307013,
+      "final_vel_error_tcn": 0.5445867605255471,
+      "final_vel_error_ekf_gps": 0.1069078068927871,
+      "mean_vel_error_dr": 93.64413252700577,
+      "mean_vel_error_tcn": 0.8900228032380704,
+      "mean_vel_error_ekf_gps": 0.21495040852924097
+    },
+    {
+      "outage_s": 60,
+      "outage_samples": 12000,
+      "final_vel_error_dr": 374.9857900634936,
+      "final_vel_error_tcn": 1.0822311165761342,
+      "final_vel_error_ekf_gps": 0.13080744532515404,
+      "mean_vel_error_dr": 187.57791559043517,
+      "mean_vel_error_tcn": 0.9136490022429259,
+      "mean_vel_error_ekf_gps": 0.18449660447123215
+    }
+  ]
+}
