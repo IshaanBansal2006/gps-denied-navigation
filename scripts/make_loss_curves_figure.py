@@ -56,46 +56,43 @@ def main() -> None:
         "axes.titleweight": "bold",
     })
 
-    fig, ax = plt.subplots(figsize=(12, 6.5), dpi=110)
-    ax2 = ax.twinx()
-    ax2.grid(False)
-    ax2.spines["top"].set_visible(False)
+    # Two stacked panels — train loss on top, val errors on bottom — avoids
+    # the twin-axis annotation collisions of the earlier draft.
+    fig, (ax_top, ax_bot) = plt.subplots(2, 1, figsize=(12, 7), dpi=110,
+                                          sharex=True, gridspec_kw={"height_ratios": [1, 1.8]})
 
-    ax.plot(epochs, train, color=C_TRAIN, lw=1.8, label="train loss (left axis)")
-    ax.set_xlabel("Epoch")
-    ax.set_ylabel("Training loss (pure-nav, normalized vel space)", color=C_TRAIN)
-    ax.tick_params(axis="y", labelcolor=C_TRAIN)
+    ax_top.plot(epochs, train, color=C_TRAIN, lw=1.8)
+    ax_top.set_ylabel("Train loss\n(normalized vel space)")
+    ax_top.set_title("LSTM v15 training dynamic — checkpoint selection on val_mean leaves val_final headroom",
+                     pad=10, fontsize=13)
 
-    ax2.plot(epochs, vmean, color=C_VMEAN, lw=2.2, label="val_mean (right axis)")
-    ax2.plot(epochs, vfin,  color=C_VFIN,  lw=2.2, label="val_final (right axis)")
-    ax2.set_ylabel("Validation rollout error (m/s)")
+    ax_bot.plot(epochs, vmean, color=C_VMEAN, lw=2.3, label="val_mean  (mean velocity error over 30 s rollout)")
+    ax_bot.plot(epochs, vfin,  color=C_VFIN,  lw=2.3, label="val_final  (velocity error at rollout end)")
+    ax_bot.set_xlabel("Epoch")
+    ax_bot.set_ylabel("Validation rollout error (m/s)")
+    ax_bot.legend(loc="center right", frameon=False, fontsize=10)
 
-    ax.axvline(best_vmean_epoch, color=C_VMEAN, ls=":", lw=1.0, alpha=0.7)
-    ax.axvline(best_vfin_epoch,  color=C_VFIN,  ls=":", lw=1.0, alpha=0.7)
+    ax_bot.axvline(best_vmean_epoch, color=C_VMEAN, ls=":", lw=1.0, alpha=0.7)
+    ax_bot.axvline(best_vfin_epoch,  color=C_VFIN,  ls=":", lw=1.0, alpha=0.7)
+    ax_top.axvline(best_vmean_epoch, color=C_VMEAN, ls=":", lw=1.0, alpha=0.4)
+    ax_top.axvline(best_vfin_epoch,  color=C_VFIN,  ls=":", lw=1.0, alpha=0.4)
 
-    ax2.annotate(
-        f"Selected checkpoint\n(min val_mean = {vmean[best_vmean_epoch-1]:.3f})\nepoch {best_vmean_epoch}",
+    ax_bot.annotate(
+        f"Selected checkpoint\nepoch {best_vmean_epoch}  ·  val_mean = {vmean[best_vmean_epoch-1]:.3f}",
         xy=(best_vmean_epoch, vmean[best_vmean_epoch - 1]),
-        xytext=(best_vmean_epoch - 8, vmean[best_vmean_epoch - 1] + 0.18),
+        xytext=(best_vmean_epoch + 1, vmean[best_vmean_epoch - 1] - 0.18),
         fontsize=9.5, color=C_VMEAN,
         arrowprops=dict(arrowstyle="->", color=C_VMEAN, lw=0.9),
     )
-    ax2.annotate(
-        f"val_final minimum\n({vfin[best_vfin_epoch-1]:.3f})\nepoch {best_vfin_epoch}\n— 5–10% gain still on the table",
+    ax_bot.annotate(
+        f"val_final minimum\nepoch {best_vfin_epoch}  ·  {vfin[best_vfin_epoch-1]:.3f}\n— 5–10% gain on the table",
         xy=(best_vfin_epoch, vfin[best_vfin_epoch - 1]),
-        xytext=(best_vfin_epoch - 17, vfin[best_vfin_epoch - 1] - 0.32),
+        xytext=(best_vfin_epoch - 14, vfin[best_vfin_epoch - 1] + 0.18),
         fontsize=9.5, color=C_VFIN,
         arrowprops=dict(arrowstyle="->", color=C_VFIN, lw=0.9),
     )
 
-    lines = [l for l in ax.get_lines() + ax2.get_lines()
-             if not l.get_label().startswith("_")]
-    labels = [l.get_label() for l in lines]
-    ax.legend(lines, labels, loc="upper right", frameon=False, fontsize=10)
-
-    ax.set_title("LSTM v15 training dynamic — checkpoint selection on val_mean leaves val_final headroom",
-                 pad=12, fontsize=13)
-    ax.set_xlim(1, n)
+    ax_bot.set_xlim(1, n)
 
     out_png = FIG_DIR / "loss_curves_v15.png"
     out_svg = FIG_DIR / "loss_curves_v15.svg"
