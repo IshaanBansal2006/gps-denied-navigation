@@ -1,9 +1,27 @@
 # Portfolio Ship Plan — gps-denied-navigation
 
-**Status:** active
-**Owner:** Ishaan
-**Target date:** 2026-06-12 (3 weeks from 2026-05-22)
+**Status:** active (compressed timeline as of 2026-05-22)
+**Owner:** Ishaan; Claude has §1 + §6 override for this project only — full code execution authorized
+**Target date:** 2026-05-26 (Tue) — apply same week
 **Audience:** recruiters reviewing for Summer 2027 ML/robotics internships (PI, Figure, Skild, DeepMind Robotics, Tesla Optimus, Nvidia GEAR)
+
+## REVISION 2026-05-22: 4-day compressed timeline
+
+Original 3-week plan is too long given the application deadline. Compressed plan:
+
+| Day | Date | Focus | Deliverables |
+|---|---|---|---|
+| 1 | Fri 5-22 | Foundation | Decision docs 027 + 028; unified eval harness; hero figure script; loss-curves plot |
+| 2 | Sat 5-23 | Headline experiment | RLS adaptation head on top of v15 (lowest-risk adaptation approach); train, eval, add to results table |
+| 3 | Sun 5-24 | Visuals + repo cleanup | Animated GIF for README; plot polish; decision doc 029 (RLS findings); dead-code pass |
+| 4 | Mon 5-25 | README + distribution | README rewrite, Notion writeup, demo video, repo polish, LinkedIn announcement |
+| Apply | Tue 5-26 | — | — |
+
+Original 3-week structure below is **superseded** — kept for reference.
+
+---
+
+## ORIGINAL 3-WEEK PLAN (superseded)
 
 ---
 
