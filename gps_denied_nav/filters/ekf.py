@@ -49,7 +49,7 @@ def quat_from_axis_angle(axis: np.ndarray, angle: float) -> np.ndarray:
 
 def quat_from_rotvec(rv: np.ndarray) -> np.ndarray:
     """Small rotation vector → quaternion."""
-    angle = np.linalg.norm(rv)
+    angle = float(np.linalg.norm(rv))
     return quat_from_axis_angle(rv, angle)
 
 
@@ -143,7 +143,7 @@ class EKF15:
         p_new = s.p + s.v * dt + 0.5 * (R @ a_c + GRAVITY) * dt**2
 
         # Attitude: q_new = q ⊗ Δq(ω_c, dt)
-        angle = np.linalg.norm(w_c) * dt
+        angle = float(np.linalg.norm(w_c) * dt)
         dq = quat_from_axis_angle(w_c, angle)
         q_new = quat_mult(s.q, dq)
         q_new /= np.linalg.norm(q_new)

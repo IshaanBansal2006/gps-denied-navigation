@@ -55,7 +55,7 @@ class LSTMRegressor(nn.Module):
         self,
         x: torch.Tensor,
         state: Optional[Tuple[torch.Tensor, torch.Tensor]] = None,
-    ) -> Tuple[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]:
+    ) -> Tuple[torch.Tensor, Optional[Tuple[torch.Tensor, torch.Tensor]]]:
         out, state = self.lstm(x, state)
         return self.head(self.dropout(out)), state
 
