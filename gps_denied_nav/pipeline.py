@@ -29,6 +29,7 @@ import numpy as np
 import torch
 from torch import nn
 
+from .adaptation.continuous import ContinuousAdapter
 from .adaptation.rls import RLSHead
 from .data.euroc import EuRoCSequence
 from .filters.velocity_only import VelocityOnlyFilter
@@ -113,6 +114,7 @@ class NavPipeline:
         norm: dict,
         device: torch.device,
         update_stride: int = 25,
+        continuous_adapter: Optional[ContinuousAdapter] = None,
     ) -> None:
         self.model = model
         self.adapter = adapter
@@ -120,11 +122,15 @@ class NavPipeline:
         self.norm = norm
         self.device = device
         self.update_stride = update_stride
+        self.continuous_adapter = continuous_adapter
 
         if adapter is not None:
             head_W = model.head.weight.detach().cpu().numpy().T
             head_b = model.head.bias.detach().cpu().numpy()
             adapter.reset(head_W, head_b)
+        if continuous_adapter is not None:
+            assert adapter is continuous_adapter.rls, \
+                "continuous_adapter.rls must reference the same RLSHead passed as `adapter`"
 
     @torch.no_grad()
     def _step_features(
@@ -190,7 +196,12 @@ class NavPipeline:
         if lstm_state_at_outage is None:
             lstm_state_at_outage = self.warmup(sequence, outage_start)
 
-        self.filter.reset(sequence.gt_vel[outage_start])
+        v_init = sequence.gt_vel[outage_start]
+        self.filter.reset(v_init)
+        if self.continuous_adapter is not None:
+            v_init_norm = ((v_init.astype(np.float64) - self.norm["y_mean"])
+                           / self.norm["y_std"]).astype(np.float64)
+            self.continuous_adapter.reset(v_init_norm, v_init)
 
         timestamps = sequence.timestamps[outage_start:outage_end + 1]
         gt_vel = sequence.gt_vel[outage_start:outage_end + 1]
@@ -216,8 +227,18 @@ class NavPipeline:
             if steps >= self.update_stride:
                 steps = 0
                 self.filter.update(v_pred)
+                # Self-supervised continuous adaptation kicks in here.
+                if self.continuous_adapter is not None:
+                    gyro_k = sequence.imu[k, :3]
+                    self.continuous_adapter.update_during_outage(
+                        h, self.filter.velocity, gyro_k,
+                        dt * self.update_stride, self.norm,
+                    )
 
             vel_est[i + 1] = self.filter.velocity
+
+        if self.continuous_adapter is not None:
+            self.continuous_adapter.restore()
 
         # Trapezoidal integration to position (origin at outage start).
         dt_arr = np.diff(timestamps)
