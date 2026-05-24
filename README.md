@@ -1,5 +1,6 @@
 # GPS-Denied Navigation for UAVs
 
+[![CI](https://github.com/IshaanBansal2006/gps-denied-navigation/actions/workflows/ci.yml/badge.svg)](https://github.com/IshaanBansal2006/gps-denied-navigation/actions/workflows/ci.yml)
 [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/IshaanBansal2006/gps-denied-navigation/blob/main/notebooks/demo.ipynb)
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![PyTorch 2.0+](https://img.shields.io/badge/PyTorch-2.0+-orange.svg)](https://pytorch.org/)
@@ -45,6 +46,9 @@ The **0.259 m/s** headline is the val-selected winner (RLS adaptation on top of 
 ---
 
 ## Use this on your own drone
+
+Full step-by-step walkthrough: [docs/use-on-your-own-data.md](docs/use-on-your-own-data.md).
+Five-minute version:
 
 ```bash
 pip install -e .
@@ -143,6 +147,8 @@ End-to-end nav loss is noisy (red line keeps falling even after `val_mean` plate
 
 ## What's next (deferred experiments)
 
+Full prioritized list with rationale: [docs/roadmap.md](docs/roadmap.md). Top of that list:
+
 1. **Cross-dataset eval on TUM-VI or KITTI** — would unblock TTT (which needs domain shift) and validate the RLS / continuous adaptation findings outside MH_05.
 2. **v18 — bigger LSTM (256/3-layer) + curriculum training** — currently training; results will land as decision 030.
 3. **LoRA adapters on the LSTM gates** — middle ground between head-only RLS (decision 029) and full-model TTT (decision 031).
@@ -161,18 +167,24 @@ gps-denied-navigation/
 │   ├── data/                   (EuRoCSequence dataset class)
 │   ├── pipeline.py             (NavPipeline composer)
 │   └── eval.py                 (OutageEvaluator)
-├── scripts/                    (pipeline, training, nav-eval, figure scripts)
-├── data/sequences/             (per-sequence imu_aligned.csv + windowed numpy)
-├── checkpoints/                (trained model binaries — v7, v11, v12, v13, v15, v18)
-├── results/                    (per-model nav-eval JSONs, loss histories)
+├── tests/                      (23 pytest unit tests — pytest tests/)
+├── scripts/                    (training, nav-eval, figure scripts)
+├── notebooks/demo.ipynb        (Colab-ready end-to-end demo)
+├── data/sequences/             (per-sequence imu_aligned.csv)
+├── checkpoints/                (trained model binaries — v7, v11–v15, v18)
+├── results/                    (per-model nav-eval JSONs)
 ├── docs/
-│   ├── decisions/              (32 dated decision docs)
-│   ├── figures/                (hero, architecture, baseline, loss curves, GIF)
+│   ├── decisions/              (32+ dated decision docs)
+│   ├── figures/                (hero, architecture, baseline, loss, GIF)
+│   ├── use-on-your-own-data.md (porting tutorial)
+│   ├── roadmap.md              (what I'd build next)
 │   ├── plan-portfolio-ship.md
 │   └── distribution.md
 ├── src/                        (backward-compat shims → gps_denied_nav.*)
+├── .github/workflows/ci.yml    (pytest + mypy on push/PR)
 ├── pyproject.toml
-└── setup.py
+├── setup.py
+└── LICENSE
 ```
 
 ---
