@@ -1,0 +1,48 @@
+{
+  "sweep": [
+    {
+      "sequence": "MH_04_difficult",
+      "outage_s": 30.0,
+      "alpha_smooth": 0.0,
+      "ema_alpha": 0.95,
+      "outage_lambda": 0.9999,
+      "final_velocity_error": 0.8109309361344761,
+      "mean_velocity_error": 1.24221144302546,
+      "final_position_drift": 25.836261724109697,
+      "mean_position_drift": 17.804881483656892
+    },
+    {
+      "sequence": "MH_04_difficult",
+      "outage_s": 30.0,
+      "alpha_smooth": 0.0,
+      "ema_alpha": 0.95,
+      "outage_lambda": 1.0,
+      "final_velocity_error": 0.8100192416892463,
+      "mean_velocity_error": 1.2422721137476453,
+      "final_position_drift": 25.839458704356172,
+      "mean_position_drift": 17.806513688974196
+    },
+    {
+      "sequence": "MH_04_difficult",
+      "outage_s": 30.0,
+      "alpha_smooth": 0.5,
+      "ema_alpha": 0.95,
+      "outage_lambda": 0.9999,
+      "final_velocity_error": 0.8481299067246223,
+      "mean_velocity_error": 1.246466362684194,
+      "final_position_drift": 25.939169174928555,
+      "mean_position_drift": 17.800792082173434
+    },
+    {
+      "sequence": "MH_04_difficult",
+      "outage_s": 30.0,
+      "alpha_smooth": 0.5,
+      "ema_alpha": 0.95,
+      "outage_lambda": 1.0,
+      "final_velocity_error": 0.8464785588341773,
+      "mean_velocity_error": 1.2463710999580833,
+      "final_position_drift": 25.939582315404582,
+      "mean_position_drift": 17.802201217615206
+    }
+  ]
+}
