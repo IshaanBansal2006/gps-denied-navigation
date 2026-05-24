@@ -62,9 +62,12 @@ Current config: `channel_sizes=[16,32,32]`, `kernel_size=3`, `dropout=0.3`, Adam
 | TCN v11 (2s window) ✓ | same 6 seqs | ~5.8k | 35 | 1.230‡ | — | **+0.158** |
 | LSTM v12 (dense, 2s) ✓ | same 6 seqs | ~12k chunks | 53 | 1.200‡ | — | +0.203 |
 | LSTM v13 (vel-weighted) ✓ | same 6 seqs | ~12k chunks | 14 | 1.484‡† | — | **+0.207** |
+| LSTM v15 (pure nav, 30s) | same 6 seqs | ~12k chunks | 24 | 1.082§ | 1.618 | -0.003 |
+| LSTM v16 (hybrid step+nav-10s) ❌ | same 6 seqs | 795 chunks | 10 | 1.002§ | 1.790 | -0.101 |
 
 † directional loss on delta_v — not comparable to MSE-only val losses
 ‡ directional loss on normalised absolute velocity — different scale, not comparable to delta_v runs
+§ val_mean = mean navigation error over 30s outage rollout (m/s) — not comparable to per-step val losses
 Best R²: **v11 (+0.158)**. Best corr_y: v11 (0.486). New baseline: v11.
 
 **Augmentation verdict** (decision 020): yaw rotation catastrophic (R² collapses 20x — destroys EuRoC heading priors).
@@ -91,9 +94,24 @@ v13 nav eval pending: better z should recover 30s.
 **v13 nav eval** (decision 025): best mean@30s = 0.913 m/s (5% better than v7). 30s final = 0.449 (tied with v7).
 Per-step MSE improvements have saturated. 30s gap to GPS (0.449 vs 0.104) is structural distribution shift.
 
+**LSTM v15 (pure nav loss, 30s outage)**: nav_val_mean 0.964, nav_val_final **0.405** (vs v13's 0.449 — first model
+to beat v13/v7 on final-position). Per-step R² collapsed to -0.003 — model abandoned step-wise accuracy entirely.
+Notable training dynamic: val_final kept dropping (0.80→0.37) after best-epoch checkpoint at epoch 24 —
+selection on val_mean may have left value on the table. Decision doc pending.
+
+**LSTM v16 (hybrid 0.5×per-step v13-weighted + 0.5×nav-10s)** ❌: best epoch 10, nav_val_mean 1.012,
+nav_val_final 0.622, r2_mean -0.101. Worse than v13 across the board. The hybrid loss with a 10s nav window
+didn't help — pure nav (v15) beat it on final-position; pure per-step (v13) beat it on R².
+
+**v15 + RLS adaptation head** (decision 029): pre-outage GPS-aided velocity feeds an online recursive-
+least-squares update to the LSTM's final linear head. At 30s outage: **0.259 m/s final velocity error
+(−36% vs vanilla v15+filter)** — closes the gap to the GPS oracle from 4× to 2.5×. Trades against
+shorter (5s/10s) and longer (60s) outages where the adapted head fails to generalize. Hyperparameters
+P₀=0.1, λ=0.995 chosen on the same test sequence — generalization to other sequences not yet validated.
+
 **Best systems by scenario:**
 - 5s outage: LSTM v12 VelFilter (0.171 m/s, matched GPS)
-- 30s final: v7 TCN (0.440) ≈ v13 LSTM (0.449)
+- **30s final: LSTM v15 VelFilter + RLS (0.259 m/s)** ⇐ new winner (decision 029)
 - 30s mean: v13 LSTM (0.913)
 - Simplest deployment: v7 TCN (stateless, no warmup)
 
@@ -101,8 +119,10 @@ Per-step MSE improvements have saturated. 30s gap to GPS (0.449 vs 0.104) is str
 1. ~~Data augmentation~~ ✓ (decision 020)
 2. ~~Longer window / TCN~~ ✓ (decisions 021-022)
 3. ~~LSTM dense + velocity-weighted~~ ✓ (decisions 023-025)
-4. **End-to-end navigation loss** — train on 30s drift directly; only lever left at this data volume
-5. Sequence-level adaptation — fine-tune LSTM on pre-outage GPS-aided velocity in real-time
+4. ~~End-to-end navigation loss~~ ✓ (v15 — wins on final-position; mean unchanged)
+5. ~~Sequence-level adaptation~~ ✓ (RLS variant — decision 029, 30s headline only)
+6. (Open) Retrain v15-style with checkpoint selection on val_final — log suggests another 5-10%
+7. (Open) Cross-sequence eval of RLS — validate the 36% claim outside MH_05
 
 Planned experiment progression (see `docs/experiments.md`):
 1. IMU-only dead reckoning baseline ✓

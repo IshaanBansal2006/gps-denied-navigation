@@ -1,0 +1,31 @@
+{
+  "sequence": "MH_05_difficult",
+  "forgetting": 0.995,
+  "p_init": 0.1,
+  "by_outage": [
+    {
+      "outage_s": 5.0,
+      "rls_final": 0.8083770734430298,
+      "rls_mean": 1.7686132164161492,
+      "rls_n_updates": 358
+    },
+    {
+      "outage_s": 10.0,
+      "rls_final": 1.251934976892976,
+      "rls_mean": 1.4404402824691875,
+      "rls_n_updates": 358
+    },
+    {
+      "outage_s": 30.0,
+      "rls_final": 0.2587697829163855,
+      "rls_mean": 1.050889591441677,
+      "rls_n_updates": 358
+    },
+    {
+      "outage_s": 60.0,
+      "rls_final": 1.2000933965327925,
+      "rls_mean": 1.1433508270623078,
+      "rls_n_updates": 358
+    }
+  ]
+}
