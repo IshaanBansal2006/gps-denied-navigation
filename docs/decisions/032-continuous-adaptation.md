@@ -1,7 +1,7 @@
-# Decision 032: Continuous Adaptation During Outage — Wash on EuRoC
+# Decision 032: Continuous Adaptation During Outage — Val/Test Disagree
 
 **Date:** 2026-05-24
-**Status:** Accepted (negative result)
+**Status:** Accepted (with val/test caveat — read §"What changed late")
 
 ## Context
 
@@ -73,17 +73,49 @@ the model *hasn't already captured*. Candidates for future work:
 3. **Visual odometry pseudo-velocity** from monocular flow — the EuRoC rig
    has cameras; integration deferred.
 
+## What changed late
+
+After committing the negative-on-val finding above, the best-by-val
+continuous config (α=0, λ=1.0) was also run on **test MH_05** for the
+ablation table. Surprise:
+
+| System | val MH_04 final_vel | **test MH_05 final_vel** |
+|---|---:|---:|
+| v15 + filter (vanilla)  | 0.782 | 0.403 |
+| v15 + filter + RLS      | **0.750** ← val best | 0.259 |
+| v15 + filter + continuous (α=0) | 0.819 | **0.246** ← test best |
+| v15 + filter + TTT+RLS  | 0.764 | 0.258 |
+
+Continuous adaptation **lost on val** but **won on test** by 5 %. This is a
+val/test methodology conflict: the val sequence (MH_04) and test sequence
+(MH_05) have different motion characteristics, and method ranking flipped.
+
 ## Decision
 
-Continuous adaptation does **not** ship to the README headline. The module
-(`gps_denied_nav.adaptation.ContinuousAdapter`) is included in the package
-for future experiments where richer self-supervised signals are available
-(stationary detection, vision, magnetometer).
+Two options for headline reporting:
+
+1. **Strict val-selection**: report only the val-selected winner. v15+RLS at
+   0.259 stays as the headline; continuous's 0.246 is mentioned but not the
+   featured number.
+2. **Inclusive ablation**: report all configs' test numbers transparently;
+   note that continuous wasn't val-selected. Reader sees both numbers and can
+   judge.
+
+**Chose option 2** (inclusive ablation). The README ablation table includes
+all four configs with their test numbers; the prose explicitly flags that
+continuous wasn't selected on val and the headline number conservatively
+stays at the RLS value 0.259. Posting 0.246 as the headline would imply
+val-test consistency that this experiment doesn't have.
+
+The honest takeaway for the recruiter: "this person ran the experiment,
+saw a val/test conflict, refused to overclaim, documented both numbers."
+That's a stronger signal than a 5 % single-shot improvement on the test set.
 
 ## What this changes about the project
 
 - New module: `gps_denied_nav/adaptation/continuous.py` (~120 lines).
 - New eval script: `scripts/neural_aided_ekf_lstm_v15_continuous.py`.
 - `NavPipeline` extended with optional `continuous_adapter=` parameter.
-- No headline change. v15 + filter + RLS remains the best 30-s system on
-  EuRoC MH_05 (decision 029).
+- README ablation table now includes Continuous (0.246) and TTT+RLS (0.258)
+  as additional attempts, with the val/test caveat.
+- Headline stays at 0.259 (val-selected RLS).
