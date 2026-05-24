@@ -64,6 +64,7 @@ Current config: `channel_sizes=[16,32,32]`, `kernel_size=3`, `dropout=0.3`, Adam
 | LSTM v13 (vel-weighted) ✓ | same 6 seqs | ~12k chunks | 14 | 1.484‡† | — | **+0.207** |
 | LSTM v15 (pure nav, 30s) | same 6 seqs | ~12k chunks | 24 | 1.082§ | 1.618 | -0.003 |
 | LSTM v16 (hybrid step+nav-10s) ❌ | same 6 seqs | 795 chunks | 10 | 1.002§ | 1.790 | -0.101 |
+| LSTM v18 (bigger + curriculum) ⏳ | same 6 seqs | ~12k chunks | TBD | TBD | TBD | TBD |
 
 † directional loss on delta_v — not comparable to MSE-only val losses
 ‡ directional loss on normalised absolute velocity — different scale, not comparable to delta_v runs
@@ -109,9 +110,25 @@ least-squares update to the LSTM's final linear head. At 30s outage: **0.259 m/s
 shorter (5s/10s) and longer (60s) outages where the adapted head fails to generalize. Hyperparameters
 P₀=0.1, λ=0.995 chosen on the same test sequence — generalization to other sequences not yet validated.
 
+**TTT (test-time training) adapter** (decision 031): Adapt the whole LSTM body via K gradient steps over
+pre-outage IMU windows. Honest negative result on EuRoC: best val_eval 0.81 vs vanilla 0.78 (regresses);
+on test MH_05 TTT+RLS combo reaches 0.258 — marginal vs RLS alone at 0.259. Module shipped
+(`gps_denied_nav.adaptation.TTTAdapter`) for future cross-dataset experiments where domain shift
+gives it something to work on.
+
+**Continuous adaptation during outage** (decision 032): RLS-style updates using self-supervised pseudo-
+targets (smoothed filter velocity + gyro-rotated previous velocity, Rodrigues formula). On val MH_04
+0.819 (worse than RLS at 0.750); on test MH_05 **0.246 (better than RLS at 0.259)** — val/test conflict.
+README headline conservatively stays at val-selected RLS (0.259); decision doc flags the conflict honestly.
+
+**v18: bigger LSTM (256/3-layer) + curriculum + val_final selection** (decision 030 pending): Training in
+progress on laptop RTX 4070. Curriculum: 10s→20s→30s OUTAGE_LEN over 15-epoch phases. Will land as
+decision 030 when complete.
+
 **Best systems by scenario:**
 - 5s outage: LSTM v12 VelFilter (0.171 m/s, matched GPS)
-- **30s final: LSTM v15 VelFilter + RLS (0.259 m/s)** ⇐ new winner (decision 029)
+- **30s final (val-selected): LSTM v15 VelFilter + RLS (0.259 m/s)** ← headline (decision 029)
+- 30s final (best on test): LSTM v15 VelFilter + Continuous-adapt (0.246 m/s) — val/test conflict (decision 032)
 - 30s mean: v13 LSTM (0.913)
 - Simplest deployment: v7 TCN (stateless, no warmup)
 
@@ -120,9 +137,12 @@ P₀=0.1, λ=0.995 chosen on the same test sequence — generalization to other 
 2. ~~Longer window / TCN~~ ✓ (decisions 021-022)
 3. ~~LSTM dense + velocity-weighted~~ ✓ (decisions 023-025)
 4. ~~End-to-end navigation loss~~ ✓ (v15 — wins on final-position; mean unchanged)
-5. ~~Sequence-level adaptation~~ ✓ (RLS variant — decision 029, 30s headline only)
-6. (Open) Retrain v15-style with checkpoint selection on val_final — log suggests another 5-10%
-7. (Open) Cross-sequence eval of RLS — validate the 36% claim outside MH_05
+5. ~~Sequence-level adaptation (RLS)~~ ✓ (decision 029, 30s headline only)
+6. ~~Test-time training of LSTM body~~ ✓ (decision 031, negative on EuRoC, module ready for cross-dataset)
+7. ~~Continuous adaptation during outage~~ ✓ (decision 032, val/test conflict, ships as alternate)
+8. ~~Retrain v15-style with val_final selection~~ (v18, in-progress, decision 030 pending)
+9. **(Open) Cross-dataset eval on TUM-VI** — unlocks (6) and validates (5)/(7)
+10. (Open) LoRA adapters on LSTM gates — middle ground between (6) and head-only RLS
 
 Planned experiment progression (see `docs/experiments.md`):
 1. IMU-only dead reckoning baseline ✓
