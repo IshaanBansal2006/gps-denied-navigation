@@ -47,9 +47,9 @@ class RLSHead:
         self.out_dim = out_dim
         self.lam = float(forgetting)
         self.p_init = float(p_init)
-        self.W = np.zeros((in_dim, out_dim), dtype=np.float64)
-        self.b = np.zeros(out_dim, dtype=np.float64)
-        self.P = np.eye(in_dim, dtype=np.float64) * self.p_init
+        self.W: np.ndarray = np.zeros((in_dim, out_dim), dtype=np.float64)
+        self.b: np.ndarray = np.zeros(out_dim, dtype=np.float64)
+        self.P: np.ndarray = np.eye(in_dim, dtype=np.float64) * self.p_init
         self._n_updates = 0
 
     def reset(self, W0: np.ndarray, b0: np.ndarray) -> None:
