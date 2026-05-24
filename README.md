@@ -1,5 +1,10 @@
 # GPS-Denied Navigation for UAVs
 
+[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/IshaanBansal2006/gps-denied-navigation/blob/main/notebooks/demo.ipynb)
+[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![PyTorch 2.0+](https://img.shields.io/badge/PyTorch-2.0+-orange.svg)](https://pytorch.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 > Keep a drone navigated when GPS dies — **0.259 m/s final velocity error after a 30-second GPS outage** on EuRoC MH_05 (held-out test sequence). 2.5× the GPS-aided EKF oracle. 170× better than naïve IMU dead-reckoning.
 
 ![Hero — 30-second outage on MH_05](docs/figures/hero.png)
