@@ -40,12 +40,12 @@ class TemporalBlock(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         out = self.conv1(x)
-        out = self.chomp(out, self.conv1.padding[0])
+        out = self.chomp(out, int(self.conv1.padding[0]))
         out = self.relu1(out)
         out = self.dropout1(out)
 
         out = self.conv2(out)
-        out = self.chomp(out, self.conv2.padding[0])
+        out = self.chomp(out, int(self.conv2.padding[0]))
         out = self.relu2(out)
         out = self.dropout2(out)
 

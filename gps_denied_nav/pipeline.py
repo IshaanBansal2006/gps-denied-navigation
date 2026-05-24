@@ -152,7 +152,7 @@ class NavPipeline:
         self,
         sequence: EuRoCSequence,
         end_idx: int,
-    ) -> tuple:
+    ) -> Optional[tuple]:
         """Run LSTM over samples [0, end_idx) to warm hidden state.
 
         If an adapter is configured, also updates it from ground-truth velocity

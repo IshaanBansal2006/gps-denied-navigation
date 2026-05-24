@@ -122,22 +122,28 @@ class ContinuousAdapter:
         dt:          Time step (s) since last update.
         norm:        Normalization stats dict (uses y_mean, y_std).
         """
+        ema_prev = self._ema_v_norm
+        last_world = self._last_v_world
+        if ema_prev is None or last_world is None:
+            raise RuntimeError("ContinuousAdapter.reset() must be called before "
+                                "update_during_outage()")
+
         # 1) Smoothed-filter pseudo-target (normalized space).
         v_filter_norm = ((v_filter_world.astype(np.float64) - norm["y_mean"])
                          / norm["y_std"])
-        self._ema_v_norm = (self.ema_alpha * self._ema_v_norm
-                            + (1.0 - self.ema_alpha) * v_filter_norm)
+        ema_new = self.ema_alpha * ema_prev + (1.0 - self.ema_alpha) * v_filter_norm
+        self._ema_v_norm = ema_new
 
         # 2) Gyro-rotated previous-velocity pseudo-target (world → normalized).
         # Note: gyro is in body frame; rotating world-frame velocity by
         # R(-gyro*dt) approximates how the velocity vector should evolve if
         # motion were purely rotational.
         R = _rodrigues(-gyro.astype(np.float64) * dt)
-        v_gyro_world = R @ self._last_v_world
+        v_gyro_world = R @ last_world
         v_gyro_norm = (v_gyro_world - norm["y_mean"]) / norm["y_std"]
 
         # 3) Blend.
-        target_norm = (self.alpha_smooth * self._ema_v_norm
+        target_norm = (self.alpha_smooth * ema_new
                        + (1.0 - self.alpha_smooth) * v_gyro_norm)
 
         # 4) RLS update with the pseudo-target.
