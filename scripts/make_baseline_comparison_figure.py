@@ -36,14 +36,15 @@ class Bar:
 def main() -> None:
     FIG_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Numbers from CLAUDE.md + decision docs (averaged across MH_05 outage windows).
+    # Numbers from CLAUDE.md + decision docs (MH_05_difficult, 30s outage, final velocity error).
     bars = [
-        Bar("IMU dead-reckon",                3.30, "#d62728", note="no model"),
-        Bar("TCN v7 + filter",                0.440, "#9c9c9c", note="prior best (decision 018)"),
-        Bar("LSTM v12 + filter",              0.497, "#9c9c9c", note="(decision 023)"),
-        Bar("LSTM v13 + filter",              0.449, "#9c9c9c", note="(decision 025)"),
-        Bar("LSTM v15 + filter (ours)",       0.405, "#1f77b4", is_ours=True, note="(decision 027)"),
-        Bar("EKF + GPS (oracle ceiling)",     0.104, "#7a7a7a", is_oracle=True),
+        Bar("IMU dead-reckon",                       45.867, "#d62728", note="no model — drifts catastrophically"),
+        Bar("TCN v7 + filter",                        0.440, "#9c9c9c", note="prior best (decision 018)"),
+        Bar("LSTM v12 + filter",                      0.497, "#9c9c9c", note="(decision 023)"),
+        Bar("LSTM v13 + filter",                      0.449, "#9c9c9c", note="(decision 025)"),
+        Bar("LSTM v15 + filter",                      0.403, "#9c9c9c", note="(decision 027)"),
+        Bar("LSTM v15 + filter + RLS adapt (ours)",   0.259, "#1f77b4", is_ours=True, note="(decision 029)"),
+        Bar("EKF + GPS (oracle ceiling)",             0.104, "#7a7a7a", is_oracle=True),
     ]
 
     plt.rcParams.update({
@@ -58,7 +59,7 @@ def main() -> None:
         "axes.titleweight": "bold",
     })
 
-    fig, ax = plt.subplots(figsize=(11, 5.5), dpi=110)
+    fig, ax = plt.subplots(figsize=(12, 6), dpi=110)
     ax.xaxis.grid(True, color="#eeeeee", lw=0.6)
     ax.yaxis.grid(False)
 
@@ -73,23 +74,21 @@ def main() -> None:
         if b.is_ours:
             bars_h[i].set_edgecolor("#1f77b4")
             bars_h[i].set_linewidth(2.0)
-        suffix = f"  m/s"
-        text_color = "white" if b.value > 0.6 else "#333333"
-        x_text = b.value - 0.02 if b.value > 0.6 else b.value + 0.03
-        ax.text(x_text, i, f"{b.value:.3f}{suffix}",
-                va="center",
-                ha="right" if b.value > 0.6 else "left",
-                color=text_color, fontsize=10.5, weight="bold")
+        x_text = b.value * 1.15
+        ax.text(x_text, i, f"{b.value:.3f} m/s",
+                va="center", ha="left",
+                color="#222222", fontsize=10.5, weight="bold")
         if b.note:
-            ax.text(values.max() * 1.04, i, b.note,
+            ax.text(values.max() * 1.6, i, b.note,
                     va="center", ha="left", color="#666666", fontsize=9.0, style="italic")
 
     ax.set_yticks(y)
     ax.set_yticklabels(labels)
     ax.invert_yaxis()
-    ax.set_xlabel("Final velocity error after 30 s GPS outage (m/s · lower is better)")
-    ax.set_xlim(0, values.max() * 1.4)
-    ax.set_title("LSTM v15 + velocity-only filter sets the new best across 30-second GPS outages on EuRoC MH_05",
+    ax.set_xlabel("Final velocity error after 30 s GPS outage (m/s · log scale · lower is better)")
+    ax.set_xscale("log")
+    ax.set_xlim(0.05, values.max() * 4.0)
+    ax.set_title("RLS-adapted LSTM v15 closes the gap to the GPS oracle to 2.5× on 30-second outages (EuRoC MH_05)",
                  pad=14, fontsize=12.5)
 
     out_png = FIG_DIR / "baseline_comparison.png"
