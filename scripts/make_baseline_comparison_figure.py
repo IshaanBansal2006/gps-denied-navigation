@@ -38,13 +38,15 @@ def main() -> None:
 
     # Numbers from CLAUDE.md + decision docs (MH_05_difficult, 30s outage, final velocity error).
     bars = [
-        Bar("IMU dead-reckon",                       45.867, "#d62728", note="no model — drifts catastrophically"),
-        Bar("TCN v7 + filter",                        0.440, "#9c9c9c", note="prior best (decision 018)"),
-        Bar("LSTM v12 + filter",                      0.497, "#9c9c9c", note="(decision 023)"),
-        Bar("LSTM v13 + filter",                      0.449, "#9c9c9c", note="(decision 025)"),
-        Bar("LSTM v15 + filter",                      0.403, "#9c9c9c", note="(decision 027)"),
-        Bar("LSTM v15 + filter + RLS adapt (ours)",   0.259, "#1f77b4", is_ours=True, note="(decision 029)"),
-        Bar("EKF + GPS (oracle ceiling)",             0.104, "#7a7a7a", is_oracle=True),
+        Bar("IMU dead-reckon",                              45.867, "#d62728", note="no model — drifts catastrophically"),
+        Bar("TCN v7 + filter",                               0.440, "#9c9c9c", note="prior best (decision 018)"),
+        Bar("LSTM v12 + filter",                             0.497, "#9c9c9c", note="(decision 023)"),
+        Bar("LSTM v13 + filter",                             0.449, "#9c9c9c", note="(decision 025)"),
+        Bar("LSTM v15 + filter",                             0.403, "#9c9c9c", note="(decision 027)"),
+        Bar("LSTM v15 + filter + RLS (headline)",            0.259, "#1f77b4", is_ours=True, note="val-selected (decision 029)"),
+        Bar("LSTM v15 + filter + TTT-then-RLS",              0.258, "#a8c8d8", note="val-eliminated (decision 031)"),
+        Bar("LSTM v15 + filter + continuous-adapt",          0.246, "#a8c8d8", note="val/test conflict (decision 032)"),
+        Bar("EKF + GPS (oracle ceiling)",                    0.104, "#7a7a7a", is_oracle=True),
     ]
 
     plt.rcParams.update({

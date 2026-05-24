@@ -1,0 +1,18 @@
+{
+  "sweep": [
+    {
+      "sequence": "MH_05_difficult",
+      "outage_s": 30.0,
+      "K": 3,
+      "lr": 1e-05,
+      "with_rls": true,
+      "freeze_lstm_layers": 0,
+      "final_velocity_error": 0.2576991349566342,
+      "mean_velocity_error": 1.0519856525728328,
+      "final_position_drift": 19.591331418584474,
+      "mean_position_drift": 15.610913419310643,
+      "ttt_initial_loss": 1.3634862899780273,
+      "ttt_final_loss": 1.304509162902832
+    }
+  ]
+}
