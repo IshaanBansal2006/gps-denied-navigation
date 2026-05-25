@@ -64,14 +64,6 @@ See `docs/plan-portfolio-ship.md` for the compressed 4-day timeline.
 | 4 (Mon 5-25) | README rewrite, Notion writeup, demo video/GIF embedded, LinkedIn announcement |
 | (Tue 5-26) | Apply |
 
-## Override note
-
-Per `~/projects/CLAUDE.md` §1, AI code authorship is normally restricted to
-scaffolding for these projects. The user has explicitly invoked the §6 override
-for this project only, for the duration of this ship sprint — Claude is writing
-the model and training code for the RLS experiment, the figure scripts, the
-animations, and the README. The override does not extend to future projects.
-
 ## What's left on the table (defer queue)
 
 After the ship, in order of expected value if the user returns to this project:
