@@ -26,9 +26,6 @@ env/
 # vscode
 .vscode/
 
-# claude code local state
-.claude/
-
 # python build artifacts
 *.egg-info/
 build/

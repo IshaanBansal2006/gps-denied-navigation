@@ -36,7 +36,7 @@ class Bar:
 def main() -> None:
     FIG_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Numbers from CLAUDE.md + decision docs (MH_05_difficult, 30s outage, final velocity error).
+    # Numbers from decision docs (MH_05_difficult, 30s outage, final velocity error).
     bars = [
         Bar("IMU dead-reckon",                              45.867, "#d62728", note="no model — drifts catastrophically"),
         Bar("TCN v7 + filter",                               0.440, "#9c9c9c", note="prior best (decision 018)"),
