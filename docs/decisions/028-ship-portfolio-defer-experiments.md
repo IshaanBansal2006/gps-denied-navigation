@@ -54,7 +54,7 @@ Specific factors:
 
 ## Plan
 
-See `docs/plan-portfolio-ship.md` for the compressed 4-day timeline.
+Compressed 4-day timeline:
 
 | Day | Output |
 |---|---|

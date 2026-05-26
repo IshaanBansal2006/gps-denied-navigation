@@ -1,8 +1,7 @@
 # Roadmap
 
 What I'd build next if I came back to this project. Ordered by expected
-return per unit effort, drawn from the open items across decisions
-029–034 and the explicit "what's left" sections of each decision doc.
+return per unit effort, drawn from the open items across the decision docs.
 
 ---
 
@@ -20,7 +19,6 @@ return per unit effort, drawn from the open items across decisions
   finally help when the model sees something it wasn't trained on?
 - **Cost:** ~1 week to wire up the new dataset's preprocessing + run
   evals.
-- **Where it lands:** decision 035.
 
 ### Retrain v15-style with `val_final` checkpoint selection (v17)
 
@@ -30,7 +28,6 @@ return per unit effort, drawn from the open items across decisions
   three variables. A clean v17 with *only* the selection criterion change
   would isolate the effect.
 - **Cost:** one line of code, one training run (~17 h on RTX 2060).
-- **Where it lands:** decision 036.
 
 ### LoRA adapters on LSTM gates
 
@@ -43,7 +40,6 @@ return per unit effort, drawn from the open items across decisions
   cross-dataset eval above — wait for that infrastructure first.
 - **Cost:** ~1 week (LoRA on `nn.LSTM` gates is fiddly; need to override
   the forward pass).
-- **Where it lands:** decision 037.
 
 ---
 
@@ -67,9 +63,8 @@ return per unit effort, drawn from the open items across decisions
   parallel measurement stream. This is where modern UAV navigation
   actually lives — IMU + vision + (when available) GPS.
 - **Cost:** substantial — wiring up a visual-odometry frontend + the
-  measurement model in the filter. ~1 month.
-- **Where it lands:** decision 038 + a new module
-  `gps_denied_nav/sensors/visual.py`.
+  measurement model in the filter. ~1 month. Would live in a new
+  `gps_denied_nav/sensors/visual.py` module.
 
 ### Online learning during operation
 
@@ -104,12 +99,14 @@ return per unit effort, drawn from the open items across decisions
 
 ## Methodology / non-modeling work
 
-### Statistical rigor passes (pending decisions 033, 034)
+### Statistical rigor passes
 
-- Cross-sequence RLS validation (decision 033, in flight) — does the
-  36% win on MH_05 replicate on MH_03 / V1_03 / MH_04?
-- Monte Carlo distribution of the headline (decision 034, in flight) —
-  is the single-point 0.259 m/s robust or a lucky window?
+- Cross-sequence RLS validation — does the 36% win on MH_05 replicate
+  on MH_03 / V1_03 / MH_04?
+- Monte Carlo distribution of the headline — is the single-point
+  0.259 m/s robust or a lucky window?
+- Multi-duration sweep — full operating curve (5–60 s outages) for each
+  system, not just the 30-s headline.
 
 ### A real "papers I'm trying to imitate" section
 
