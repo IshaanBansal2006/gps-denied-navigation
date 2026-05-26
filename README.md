@@ -107,7 +107,7 @@ python3 scripts/make_loss_curves_figure.py
 
 ## Approach — the decision trail
 
-This project ran 16 model variants, 9 nav-eval studies, and 32 numbered decision docs. The high-leverage moves, in chronological order:
+This project ran 16 model variants, 9 nav-eval studies, and 32 decision docs. The high-leverage moves, in chronological order:
 
 | Decision | What changed | Why it mattered |
 |---|---|---|
@@ -150,9 +150,8 @@ End-to-end nav loss is noisy (red line keeps falling even after `val_mean` plate
 Full prioritized list with rationale: [docs/roadmap.md](docs/roadmap.md). Top of that list:
 
 1. **Cross-dataset eval on TUM-VI or KITTI** — would unblock TTT (which needs domain shift) and validate the RLS / continuous adaptation findings outside MH_05.
-2. **v18 — bigger LSTM (256/3-layer) + curriculum training** — currently training; results will land as decision 030.
-3. **LoRA adapters on the LSTM gates** — middle ground between head-only RLS (decision 029) and full-model TTT (decision 031).
-4. **Zero-velocity update (ZUPT) for continuous adapter** — needs a different dataset; EuRoC has no genuinely stationary windows.
+2. **LoRA adapters on the LSTM gates** — middle ground between head-only RLS (decision 029) and full-model TTT (decision 031).
+3. **Zero-velocity update (ZUPT) for continuous adapter** — needs a different dataset; EuRoC has no genuinely stationary windows.
 
 ---
 
@@ -174,12 +173,10 @@ gps-denied-navigation/
 ├── checkpoints/                (trained model binaries — v7, v11–v15, v18)
 ├── results/                    (per-model nav-eval JSONs)
 ├── docs/
-│   ├── decisions/              (32+ dated decision docs)
+│   ├── decisions/              (dated decision docs)
 │   ├── figures/                (hero, architecture, baseline, loss, GIF)
 │   ├── use-on-your-own-data.md (porting tutorial)
-│   ├── roadmap.md              (what I'd build next)
-│   ├── plan-portfolio-ship.md
-│   └── distribution.md
+│   └── roadmap.md              (what I'd build next)
 ├── src/                        (backward-compat shims → gps_denied_nav.*)
 ├── .github/workflows/ci.yml    (pytest + mypy on push/PR)
 ├── pyproject.toml
