@@ -115,7 +115,7 @@ def main() -> None:
     gps_right = gps_x + gps_w  # = 3.2
     box(ax, gps_x, gps_y, gps_w, gps_h,
         "GPS (when available)",
-        sub="ground-truth velocity\n→ supervises RLS head (pre-outage)",
+        sub="ground-truth velocity\nsupervises RLS (pre-outage)",
         fill=C_GPS, alpha=0.35, ec="#cc7f0e", lw=1.5,
         title_size=11.5, sub_size=8.8)
     arrow(ax, gps_right, 7.05, bx, 7.05, color="#cc7f0e", lw=1.8, ls="--")
