@@ -29,19 +29,21 @@ C_GPS    = "#ffb86b"
 
 
 def box(ax, x, y, w, h, title, sub=None, fill="#ffffff", ec="#222", alpha=1.0,
-        title_color="#111111", sub_color="#444", lw=1.5):
+        title_color="#111111", sub_color="#444", lw=1.5,
+        title_size=12, sub_size=9.5):
     rect = mpatches.FancyBboxPatch(
         (x, y), w, h, boxstyle="round,pad=0.08,rounding_size=0.18",
         linewidth=lw, facecolor=fill, edgecolor=ec, alpha=alpha)
     ax.add_patch(rect)
     if sub:
         ax.text(x + w / 2, y + h * 0.66, title,
-                ha="center", va="center", fontsize=12, weight="bold", color=title_color)
-        ax.text(x + w / 2, y + h * 0.30, sub,
-                ha="center", va="center", fontsize=9.5, color=sub_color, style="italic")
+                ha="center", va="center", fontsize=title_size, weight="bold", color=title_color)
+        ax.text(x + w / 2, y + h * 0.28, sub,
+                ha="center", va="center", fontsize=sub_size, color=sub_color,
+                style="italic", linespacing=1.15)
     else:
         ax.text(x + w / 2, y + h / 2, title,
-                ha="center", va="center", fontsize=12, weight="bold", color=title_color)
+                ha="center", va="center", fontsize=title_size, weight="bold", color=title_color)
 
 
 def arrow(ax, x1, y1, x2, y2, color="#333", lw=2.0, ls="-",
@@ -105,16 +107,18 @@ def main() -> None:
         sub="128 → 3  ·  online updates while GPS is available",
         fill=C_HEAD, alpha=0.20, ec=C_HEAD, lw=2.0)
 
-    # Side bus: GPS into RLS update
-    gps_x, gps_w = 0.4, 3.0
-    gps_right = gps_x + gps_w  # = 3.4
-    box(ax, gps_x, 6.5, gps_w, 1.1,
+    # Side bus: GPS into RLS update.
+    # All supervision info lives inside the GPS box (taller, 2-line subtitle),
+    # so the dashed arrow can stay unlabeled and clean.
+    gps_x, gps_w, gps_h = 0.4, 2.8, 1.4
+    gps_y = 6.35   # centers GPS at y=7.05, same as RLS head, so arrow is horizontal
+    gps_right = gps_x + gps_w  # = 3.2
+    box(ax, gps_x, gps_y, gps_w, gps_h,
         "GPS (when available)",
-        sub="ground-truth velocity",
-        fill=C_GPS, alpha=0.35, ec="#cc7f0e", lw=1.5)
+        sub="ground-truth velocity\n→ supervises RLS head (pre-outage)",
+        fill=C_GPS, alpha=0.35, ec="#cc7f0e", lw=1.5,
+        title_size=11.5, sub_size=8.8)
     arrow(ax, gps_right, 7.05, bx, 7.05, color="#cc7f0e", lw=1.8, ls="--")
-    ax.text((gps_right + bx) / 2, 8.0, "RLS update target  (pre-outage only)",
-            ha="center", fontsize=9.5, color="#cc7f0e", style="italic")
 
     # ROW 4: Filter
     arrow(ax, cx, 6.5, cx, 5.7, color=C_HEAD,
