@@ -46,6 +46,68 @@ def box(ax, x, y, w, h, title, sub=None, fill="#ffffff", ec="#222", alpha=1.0,
                 ha="center", va="center", fontsize=title_size, weight="bold", color=title_color)
 
 
+def verify_text_fits(fig, ax, box_pad: float = 0.08, tol: float = 0.02) -> list[dict]:
+    """Check that every Text artist whose center falls inside a FancyBboxPatch
+    is fully contained within that box (accounting for FancyBboxPatch pad).
+
+    Returns a list of overflow records. Empty list = clean layout.
+
+    Uses matplotlib's renderer to get true text extents in data coords —
+    catches font-metric-dependent overflows that eyeballing the source misses.
+    """
+    fig.canvas.draw()
+    renderer = fig.canvas.get_renderer()
+    inv = ax.transData.inverted()
+
+    boxes = []
+    for patch in ax.patches:
+        if isinstance(patch, mpatches.FancyBboxPatch):
+            x, y = patch.get_x(), patch.get_y()
+            w, h = patch.get_width(), patch.get_height()
+            # Visual edges of FancyBboxPatch extend `pad` beyond the rect
+            boxes.append((x - box_pad, y - box_pad,
+                          x + w + box_pad, y + h + box_pad, patch))
+
+    overflows = []
+    for txt in ax.texts:
+        if not txt.get_text():
+            continue
+        disp_bbox = txt.get_window_extent(renderer=renderer)
+        x0, y0 = inv.transform((disp_bbox.x0, disp_bbox.y0))
+        x1, y1 = inv.transform((disp_bbox.x1, disp_bbox.y1))
+        tx0, ty0, tx1, ty1 = min(x0, x1), min(y0, y1), max(x0, x1), max(y0, y1)
+        cx, cy = (tx0 + tx1) / 2, (ty0 + ty1) / 2
+
+        # Find the smallest box whose visual rect contains this text's center
+        containing = None
+        for bx0, by0, bx1, by1, patch in boxes:
+            if bx0 <= cx <= bx1 and by0 <= cy <= by1:
+                area = (bx1 - bx0) * (by1 - by0)
+                if containing is None or area < containing[0]:
+                    containing = (area, bx0, by0, bx1, by1, patch)
+        if containing is None:
+            continue
+
+        _, bx0, by0, bx1, by1, patch = containing
+        overflow_left   = max(0.0, bx0 - tx0)
+        overflow_right  = max(0.0, tx1 - bx1)
+        overflow_top    = max(0.0, ty1 - by1)
+        overflow_bottom = max(0.0, by0 - ty0)
+        if max(overflow_left, overflow_right, overflow_top, overflow_bottom) > tol:
+            overflows.append({
+                "text": txt.get_text().replace("\n", "\\n"),
+                "text_bbox": (round(tx0, 3), round(ty0, 3), round(tx1, 3), round(ty1, 3)),
+                "box_bbox":  (round(bx0, 3), round(by0, 3), round(bx1, 3), round(by1, 3)),
+                "overflow":  {
+                    "left":   round(overflow_left,   3),
+                    "right":  round(overflow_right,  3),
+                    "top":    round(overflow_top,    3),
+                    "bottom": round(overflow_bottom, 3),
+                },
+            })
+    return overflows
+
+
 def arrow(ax, x1, y1, x2, y2, color="#333", lw=2.0, ls="-",
           label=None, label_color="#333", label_size=10, label_offset=(0.25, 0)):
     ax.annotate(
@@ -67,23 +129,23 @@ def main() -> None:
         "font.family": "DejaVu Sans",
     })
 
-    fig, ax = plt.subplots(figsize=(14, 10.5), dpi=120)
-    ax.set_xlim(0, 14)
+    fig, ax = plt.subplots(figsize=(16, 11), dpi=120)
+    ax.set_xlim(0, 16)
     ax.set_ylim(0, 13)
     ax.set_aspect("equal")
     ax.axis("off")
 
     # Title
-    ax.text(7.0, 12.5, "GPS-Denied Navigation Pipeline",
+    ax.text(8.5, 12.5, "GPS-Denied Navigation Pipeline",
             ha="center", fontsize=17, weight="bold", color="#111111")
-    ax.text(7.0, 12.05,
+    ax.text(8.5, 12.05,
             "Frozen LSTM body  ·  RLS-adapted linear head  ·  Velocity-only Kalman filter  ·  3-D position estimate",
             ha="center", fontsize=11, color="#444444", style="italic")
 
-    # Vertical pipeline x positions
-    cx = 7.0     # center column
-    bw = 4.6     # default box width
-    bx = cx - bw / 2  # = 4.7
+    # Vertical pipeline x positions — wider main column so long subtitles fit on one line
+    cx = 8.5     # center column
+    bw = 8.0     # default box width
+    bx = cx - bw / 2  # = 4.5
 
     # ROW 1: IMU input
     box(ax, bx, 10.3, bw, 1.1,
@@ -110,14 +172,14 @@ def main() -> None:
     # Side bus: GPS into RLS update.
     # All supervision info lives inside the GPS box (taller, 2-line subtitle),
     # so the dashed arrow can stay unlabeled and clean.
-    gps_x, gps_w, gps_h = 0.4, 2.8, 1.4
+    gps_x, gps_w, gps_h = 0.4, 3.2, 1.4
     gps_y = 6.35   # centers GPS at y=7.05, same as RLS head, so arrow is horizontal
-    gps_right = gps_x + gps_w  # = 3.2
+    gps_right = gps_x + gps_w  # = 3.6
     box(ax, gps_x, gps_y, gps_w, gps_h,
         "GPS (when available)",
         sub="ground-truth velocity\nsupervises RLS (pre-outage)",
         fill=C_GPS, alpha=0.35, ec="#cc7f0e", lw=1.5,
-        title_size=11.5, sub_size=8.8)
+        title_size=11.5, sub_size=9.0)
     arrow(ax, gps_right, 7.05, bx, 7.05, color="#cc7f0e", lw=1.8, ls="--")
 
     # ROW 4: Filter
@@ -137,25 +199,40 @@ def main() -> None:
         fill=C_OUT, alpha=0.22, ec=C_OUT, lw=2.0)
 
     # --- Bottom strip: API one-liner ---
+    api_x, api_w = 0.4, 15.2
+    api_cx = api_x + api_w / 2  # = 8.0
     rect = mpatches.FancyBboxPatch(
-        (0.4, 0.4), 13.2, 1.8,
+        (api_x, 0.4), api_w, 1.8,
         boxstyle="round,pad=0.08,rounding_size=0.18",
         linewidth=1.0, facecolor="#f7f7f7", edgecolor="#bbb")
     ax.add_patch(rect)
-    ax.text(0.7, 1.95, "API — reusable in other projects",
+    ax.text(api_x + 0.3, 1.95, "API — reusable in other projects",
             ha="left", va="center", fontsize=10, weight="bold", color="#444")
-    ax.text(7.0, 1.50,
+    ax.text(api_cx, 1.50,
             "from gps_denied_nav import NavPipeline, EuRoCSequence",
             ha="center", fontsize=10.0, color="#222",
             family="monospace")
-    ax.text(7.0, 1.15,
+    ax.text(api_cx, 1.15,
             "pipeline = NavPipeline(model=lstm_v15, adapter=RLSHead(...), filter=VelocityOnlyFilter())",
             ha="center", fontsize=10.0, color="#222",
             family="monospace")
-    ax.text(7.0, 0.80,
+    ax.text(api_cx, 0.80,
             "result = pipeline.run_outage(seq, outage_start, outage_end)   # → 0.259 m/s after 30 s on MH_05",
             ha="center", fontsize=10.0, color="#666",
             family="monospace", style="italic")
+
+    # Verify text fits inside boxes BEFORE saving — catches font-metric
+    # overflows that visual inspection might miss.
+    overflows = verify_text_fits(fig, ax)
+    if overflows:
+        print(f"\n[layout] {len(overflows)} text overflow(s) detected:")
+        for o in overflows:
+            sides = ", ".join(f"{k}={v}" for k, v in o["overflow"].items() if v > 0)
+            print(f"  - text={o['text']!r}")
+            print(f"    text_bbox={o['text_bbox']}  box_bbox={o['box_bbox']}")
+            print(f"    overflow: {sides}")
+    else:
+        print("[layout] OK — all text fits inside its containing box.")
 
     out_png = FIG_DIR / "architecture.png"
     out_svg = FIG_DIR / "architecture.svg"
