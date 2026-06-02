@@ -2,13 +2,12 @@ name: Deploy ladder
 
 # Comprehensive deployability check — runs on a brand-new Ubuntu VM with
 # zero history, simulating what an outside user / fresh CI machine sees.
-# Trigger manually with `gh workflow run "Deploy ladder"` or by pushing
-# to a `test/**` branch.
+# Manual-only: trigger with `gh workflow run "Deploy ladder"` or from the
+# Actions tab on GitHub. Not on every push (heavy: builds wheel, fresh
+# venv install, executes the notebook).
 
 on:
   workflow_dispatch:
-  push:
-    branches: ['test/**']
 
 jobs:
   ladder:
