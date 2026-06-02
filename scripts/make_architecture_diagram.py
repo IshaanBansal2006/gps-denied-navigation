@@ -65,23 +65,23 @@ def main() -> None:
         "font.family": "DejaVu Sans",
     })
 
-    fig, ax = plt.subplots(figsize=(13, 10.5), dpi=120)
-    ax.set_xlim(0, 13)
+    fig, ax = plt.subplots(figsize=(14, 10.5), dpi=120)
+    ax.set_xlim(0, 14)
     ax.set_ylim(0, 13)
     ax.set_aspect("equal")
     ax.axis("off")
 
     # Title
-    ax.text(6.5, 12.5, "GPS-Denied Navigation Pipeline",
+    ax.text(7.0, 12.5, "GPS-Denied Navigation Pipeline",
             ha="center", fontsize=17, weight="bold", color="#111111")
-    ax.text(6.5, 12.05,
+    ax.text(7.0, 12.05,
             "Frozen LSTM body  ·  RLS-adapted linear head  ·  Velocity-only Kalman filter  ·  3-D position estimate",
             ha="center", fontsize=11, color="#444444", style="italic")
 
     # Vertical pipeline x positions
-    cx = 6.5     # center column
+    cx = 7.0     # center column
     bw = 4.6     # default box width
-    bx = cx - bw / 2
+    bx = cx - bw / 2  # = 4.7
 
     # ROW 1: IMU input
     box(ax, bx, 10.3, bw, 1.1,
@@ -106,12 +106,14 @@ def main() -> None:
         fill=C_HEAD, alpha=0.20, ec=C_HEAD, lw=2.0)
 
     # Side bus: GPS into RLS update
-    box(ax, 0.3, 6.5, 2.3, 1.1,
+    gps_x, gps_w = 0.4, 3.0
+    gps_right = gps_x + gps_w  # = 3.4
+    box(ax, gps_x, 6.5, gps_w, 1.1,
         "GPS (when available)",
         sub="ground-truth velocity",
         fill=C_GPS, alpha=0.35, ec="#cc7f0e", lw=1.5)
-    arrow(ax, 2.6, 7.05, bx, 7.05, color="#cc7f0e", lw=1.8, ls="--")
-    ax.text((2.6 + bx) / 2, 7.45, "RLS update target  (pre-outage only)",
+    arrow(ax, gps_right, 7.05, bx, 7.05, color="#cc7f0e", lw=1.8, ls="--")
+    ax.text((gps_right + bx) / 2, 8.0, "RLS update target  (pre-outage only)",
             ha="center", fontsize=9.5, color="#cc7f0e", style="italic")
 
     # ROW 4: Filter
@@ -132,23 +134,23 @@ def main() -> None:
 
     # --- Bottom strip: API one-liner ---
     rect = mpatches.FancyBboxPatch(
-        (0.4, 0.4), 12.2, 1.8,
+        (0.4, 0.4), 13.2, 1.8,
         boxstyle="round,pad=0.08,rounding_size=0.18",
         linewidth=1.0, facecolor="#f7f7f7", edgecolor="#bbb")
     ax.add_patch(rect)
     ax.text(0.7, 1.95, "API — reusable in other projects",
             ha="left", va="center", fontsize=10, weight="bold", color="#444")
-    ax.text(6.5, 1.50,
+    ax.text(7.0, 1.50,
             "from gps_denied_nav import NavPipeline, EuRoCSequence",
-            ha="center", fontsize=10.8, color="#222",
+            ha="center", fontsize=10.0, color="#222",
             family="monospace")
-    ax.text(6.5, 1.15,
+    ax.text(7.0, 1.15,
             "pipeline = NavPipeline(model=lstm_v15, adapter=RLSHead(...), filter=VelocityOnlyFilter())",
-            ha="center", fontsize=10.8, color="#222",
+            ha="center", fontsize=10.0, color="#222",
             family="monospace")
-    ax.text(6.5, 0.80,
-            "result = pipeline.run_outage(sequence, outage_start, outage_end)   # → 0.259 m/s @ 30 s on MH_05",
-            ha="center", fontsize=10.5, color="#666",
+    ax.text(7.0, 0.80,
+            "result = pipeline.run_outage(seq, outage_start, outage_end)   # → 0.259 m/s after 30 s on MH_05",
+            ha="center", fontsize=10.0, color="#666",
             family="monospace", style="italic")
 
     out_png = FIG_DIR / "architecture.png"
