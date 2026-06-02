@@ -102,9 +102,13 @@ jobs:
         continue-on-error: true
         run: |
           pip install jupyter nbconvert ipykernel
+          # Pin cwd to the repo root so relative paths like `data/sequences/...`
+          # and `checkpoints/...` in the notebook resolve correctly (default
+          # nbconvert cwd is the notebook's parent directory).
           jupyter nbconvert --to notebook --execute notebooks/demo.ipynb \
             --output /tmp/demo_executed.ipynb \
-            --ExecutePreprocessor.timeout=600
+            --ExecutePreprocessor.timeout=600 \
+            --ExecutePreprocessor.cwd="$PWD"
 
       - name: Summary
         if: always()
