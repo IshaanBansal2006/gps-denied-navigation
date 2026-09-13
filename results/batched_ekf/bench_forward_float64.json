@@ -1,0 +1,169 @@
+{
+  "meta": {
+    "gpu": "NVIDIA GeForce RTX 4070 Laptop GPU",
+    "cpu_threads": 2,
+    "torch": "2.4.1+cu121"
+  },
+  "rows": [
+    {
+      "backend": "numpy_ekf15",
+      "dtype": "float64",
+      "n_filters": 16,
+      "steps": 40,
+      "seconds": 0.4555864499998279,
+      "filter_steps_per_s": 1404.7827805244028
+    },
+    {
+      "backend": "torch_ref_cpu",
+      "dtype": "float64",
+      "n_filters": 1,
+      "steps": 40,
+      "seconds": 0.06471644599969295,
+      "filter_steps_per_s": 618.0809125425365
+    },
+    {
+      "backend": "torch_ref_cuda",
+      "dtype": "float64",
+      "n_filters": 1,
+      "steps": 40,
+      "seconds": 0.3818547719997696,
+      "filter_steps_per_s": 104.75186624098058
+    },
+    {
+      "backend": "cpp_cpu_threads",
+      "dtype": "float64",
+      "n_filters": 1,
+      "steps": 40,
+      "seconds": 0.0002488779996383528,
+      "filter_steps_per_s": 160721.31750546218
+    },
+    {
+      "backend": "cuda_kernel",
+      "dtype": "float64",
+      "n_filters": 1,
+      "steps": 40,
+      "seconds": 0.0082404959998712,
+      "filter_steps_per_s": 4854.076744970837
+    },
+    {
+      "backend": "torch_ref_cpu",
+      "dtype": "float64",
+      "n_filters": 64,
+      "steps": 40,
+      "seconds": 0.09191246199998204,
+      "filter_steps_per_s": 27852.588694670154
+    },
+    {
+      "backend": "torch_ref_cuda",
+      "dtype": "float64",
+      "n_filters": 64,
+      "steps": 40,
+      "seconds": 0.3734330590000354,
+      "filter_steps_per_s": 6855.311650380041
+    },
+    {
+      "backend": "cpp_cpu_threads",
+      "dtype": "float64",
+      "n_filters": 64,
+      "steps": 40,
+      "seconds": 0.007307207999929233,
+      "filter_steps_per_s": 350339.00773384207
+    },
+    {
+      "backend": "cuda_kernel",
+      "dtype": "float64",
+      "n_filters": 64,
+      "steps": 40,
+      "seconds": 0.021892927999942913,
+      "filter_steps_per_s": 116932.73736645347
+    },
+    {
+      "backend": "torch_ref_cpu",
+      "dtype": "float64",
+      "n_filters": 1024,
+      "steps": 40,
+      "seconds": 0.5478020020000258,
+      "filter_steps_per_s": 74771.5412693911
+    },
+    {
+      "backend": "torch_ref_cuda",
+      "dtype": "float64",
+      "n_filters": 1024,
+      "steps": 40,
+      "seconds": 0.39783896599965374,
+      "filter_steps_per_s": 102956.22978277007
+    },
+    {
+      "backend": "cpp_cpu_threads",
+      "dtype": "float64",
+      "n_filters": 1024,
+      "steps": 40,
+      "seconds": 0.11084444700009044,
+      "filter_steps_per_s": 369526.8559548732
+    },
+    {
+      "backend": "cuda_kernel",
+      "dtype": "float64",
+      "n_filters": 1024,
+      "steps": 40,
+      "seconds": 0.031301180999889766,
+      "filter_steps_per_s": 1308576.8233519448
+    },
+    {
+      "backend": "torch_ref_cpu",
+      "dtype": "float64",
+      "n_filters": 16384,
+      "steps": 40,
+      "seconds": 5.891213318999689,
+      "filter_steps_per_s": 111243.63768774175
+    },
+    {
+      "backend": "torch_ref_cuda",
+      "dtype": "float64",
+      "n_filters": 16384,
+      "steps": 40,
+      "seconds": 1.6321554460000698,
+      "filter_steps_per_s": 401530.3821741327
+    },
+    {
+      "backend": "cpp_cpu_threads",
+      "dtype": "float64",
+      "n_filters": 16384,
+      "steps": 40,
+      "seconds": 2.0810548730000846,
+      "filter_steps_per_s": 314917.21266110666
+    },
+    {
+      "backend": "cuda_kernel",
+      "dtype": "float64",
+      "n_filters": 16384,
+      "steps": 40,
+      "seconds": 0.17599836600038543,
+      "filter_steps_per_s": 3723670.9345276807
+    },
+    {
+      "backend": "torch_ref_cuda",
+      "dtype": "float64",
+      "n_filters": 65536,
+      "steps": 40,
+      "seconds": 4.916985711000052,
+      "filter_steps_per_s": 533139.6416579849
+    },
+    {
+      "backend": "cpp_cpu_threads",
+      "dtype": "float64",
+      "n_filters": 65536,
+      "steps": 40,
+      "seconds": 11.29636894999976,
+      "filter_steps_per_s": 232060.40911049172
+    },
+    {
+      "backend": "cuda_kernel",
+      "dtype": "float64",
+      "n_filters": 65536,
+      "steps": 40,
+      "seconds": 0.6317400689999886,
+      "filter_steps_per_s": 4149554.743534951
+    }
+  ]
+}
