@@ -1,0 +1,35 @@
+{
+  "meta": {
+    "gpu": "NVIDIA GeForce RTX 4070 Laptop GPU",
+    "torch": "2.4.1+cu121"
+  },
+  "rows": [
+    {
+      "backend": "cuda_kernel_fn",
+      "dtype": "float64",
+      "n_filters": 1024,
+      "steps": 100,
+      "seconds": 0.10029832299915142,
+      "filter_steps_per_s": 1020954.2586356739,
+      "peak_mem_mb": 205.7822265625
+    },
+    {
+      "backend": "cuda_kernel_fn",
+      "dtype": "float64",
+      "n_filters": 4096,
+      "steps": 100,
+      "seconds": 0.2581623030000628,
+      "filter_steps_per_s": 1586598.7994378107,
+      "peak_mem_mb": 798.9072265625
+    },
+    {
+      "backend": "cuda_kernel_fn",
+      "dtype": "float64",
+      "n_filters": 8192,
+      "steps": 100,
+      "seconds": 0.5709319810002853,
+      "filter_steps_per_s": 1434846.9296898446,
+      "peak_mem_mb": 1597.8134765625
+    }
+  ]
+}
