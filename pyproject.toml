@@ -34,3 +34,6 @@ Repository = "https://github.com/IshaanBansal2006/gps-denied-navigation"
 [tool.setuptools.packages.find]
 include = ["gps_denied_nav*"]
 exclude = ["scripts*", "tests*", "docs*", "data*", "checkpoints*", "results*", "logs*"]
+
+[tool.setuptools.package-data]
+"gps_denied_nav.batched_ekf" = ["csrc/*.h", "csrc/*.cpp", "csrc/*.cu"]
