@@ -352,4 +352,215 @@ BEKF_HD inline void step_forward(
   }
 }
 
+// ----------------------------------------------------------- backward step
+//
+// Reverse-mode VJPs. Every gradient output is overwritten (not accumulated)
+// except where noted, so callers need not zero them.
+
+template <typename T>
+BEKF_HD inline void update_backward(
+    const T* r, const StepCache<T>& c, const T* gx2, const T* gP2,
+    T* gx1, T* gP1, T* gz, T* gr) {
+  const T* x1 = c.x1;
+  const T* P1 = c.P1;
+  fill(gx1, kX, T(0));
+  fill(gP1, kE * kE, T(0));
+  fill(gr, 3, T(0));
+
+  T gdx[kE];
+  for (int i = 0; i < 3; ++i) {
+    gdx[i] = gx2[i];
+    gdx[3 + i] = gx2[3 + i];
+    gdx[6 + i] = 0;
+    gdx[9 + i] = gx2[10 + i];
+    gdx[12 + i] = gx2[13 + i];
+    gx1[i] = gx2[i];
+    gx1[3 + i] = gx2[3 + i];
+    gx1[10 + i] = gx2[10 + i];
+    gx1[13 + i] = gx2[13 + i];
+  }
+
+  // q2 = normalize(rotvec(dx[6:9]) ⊗ q1)
+  T q2[4], gq2u[4] = {0, 0, 0, 0}, gdq2[4] = {0, 0, 0, 0};
+  for (int i = 0; i < 4; ++i) q2[i] = c.q2u[i] / c.q2unorm;
+  normalize4_vjp(q2, c.q2unorm, gx2 + 6, gq2u);
+  quat_mul_vjp(c.dq2, x1 + 6, gq2u, gdq2, gx1 + 6);
+  rotvec_to_quat_vjp(c.dx + 6, gdq2, gdx + 6);
+
+  // dx = K innov,  innov = z - v1
+  T gK[kE * 3];
+  for (int i = 0; i < kE; ++i) {
+    for (int j = 0; j < 3; ++j) gK[3 * i + j] = gdx[i] * c.innov[j];
+  }
+  T ginnov[3];
+  matmul_tn(c.K, gdx, ginnov, kE, 3, 1);
+  for (int i = 0; i < 3; ++i) {
+    gz[i] = ginnov[i];
+    gx1[3 + i] -= ginnov[i];
+  }
+
+  // P2 = A P1 A^T + K Rm K^T
+  T tmp[kE * kE], tmp2[kE * kE], gA[kE * kE];
+  matmul_tn(c.A, gP2, tmp, kE, kE, kE);
+  matmul(tmp, c.A, gP1, kE, kE, kE);
+
+  matmul_nt(c.A, P1, tmp, kE, kE, kE);       // A P1^T
+  matmul(gP2, tmp, gA, kE, kE, kE);          // G A P1^T
+  matmul(c.A, P1, tmp, kE, kE, kE);          // A P1
+  matmul_tn(gP2, tmp, tmp2, kE, kE, kE);     // G^T A P1
+  for (int i = 0; i < kE * kE; ++i) gA[i] += tmp2[i];
+
+  for (int i = 0; i < kE; ++i) {
+    for (int j = 0; j < 3; ++j) {
+      T acc = 0;
+      for (int k = 0; k < kE; ++k) acc += (gP2[i * kE + k] + gP2[k * kE + i]) * c.K[3 * k + j];
+      gK[3 * i + j] += acc * r[j] - gA[i * kE + 3 + j];
+    }
+  }
+  for (int j = 0; j < 3; ++j) {
+    T acc = 0;
+    for (int i = 0; i < kE; ++i) {
+      for (int k = 0; k < kE; ++k) acc += c.K[3 * i + j] * gP2[i * kE + k] * c.K[3 * k + j];
+    }
+    gr[j] += acc;
+  }
+
+  // K = M Sinv,  M = P1[:, 3:6],  S = P1[3:6, 3:6] + diag(r)
+  T gSinv[9], gS[9], t3[9];
+  for (int l = 0; l < 3; ++l) {
+    for (int j = 0; j < 3; ++j) {
+      T acc = 0;
+      for (int i = 0; i < kE; ++i) acc += P1[i * kE + 3 + l] * gK[3 * i + j];
+      gSinv[3 * l + j] = acc;
+    }
+  }
+  for (int i = 0; i < kE; ++i) {
+    for (int l = 0; l < 3; ++l) {
+      gP1[i * kE + 3 + l] += gK[3 * i] * c.Sinv[3 * l] + gK[3 * i + 1] * c.Sinv[3 * l + 1] +
+                             gK[3 * i + 2] * c.Sinv[3 * l + 2];
+    }
+  }
+  matmul_tn(c.Sinv, gSinv, t3, 3, 3, 3);
+  matmul_nt(t3, c.Sinv, gS, 3, 3, 3);
+  for (int a = 0; a < 3; ++a) {
+    for (int b = 0; b < 3; ++b) gP1[(3 + a) * kE + 3 + b] -= gS[3 * a + b];
+    gr[a] -= gS[3 * a + a];
+  }
+}
+
+template <typename T>
+BEKF_HD inline void predict_backward(
+    const T* x, const T* P, const T* qc, T dt, const StepCache<T>& c, const T* gx1,
+    const T* gP1, T* gx, T* gP, T* gimu, T* gqc) {
+  fill(gx, kX, T(0));
+  fill(gimu, 6, T(0));
+  fill(gqc, 12, T(0));
+
+  T gf[3], gac[3] = {0, 0, 0}, gwc[3] = {0, 0, 0}, gR[9];
+  fill(gR, 9, T(0));
+  for (int i = 0; i < 3; ++i) {
+    gx[i] = gx1[i];
+    gx[3 + i] = gx1[3 + i] + gx1[i] * dt;
+    gx[10 + i] = gx1[10 + i];
+    gx[13 + i] = gx1[13 + i];
+    gf[i] = gx1[3 + i] * dt + T(0.5) * dt * dt * gx1[i];
+  }
+
+  // q1 = normalize(q ⊗ rotvec(wc dt))
+  T gq1u[4] = {0, 0, 0, 0}, gdqw[4] = {0, 0, 0, 0}, grv[3] = {0, 0, 0};
+  normalize4_vjp(c.x1 + 6, c.q1unorm, gx1 + 6, gq1u);
+  quat_mul_vjp(x + 6, c.dqw, gq1u, gx + 6, gdqw);
+  rotvec_to_quat_vjp(c.rv, gdqw, grv);
+  for (int i = 0; i < 3; ++i) gwc[i] += grv[i] * dt;
+
+  // f = R ac + g
+  for (int i = 0; i < 3; ++i) {
+    for (int j = 0; j < 3; ++j) {
+      gR[3 * i + j] += gf[i] * c.ac[j];
+      gac[j] += c.R[3 * i + j] * gf[i];
+    }
+  }
+
+  // P1 = Phi P Phi^T + Qd
+  T tmp[kE * kE], gPhi[kE * kE], tmp2[kE * kE];
+  matmul_tn(c.Phi, gP1, tmp, kE, kE, kE);
+  matmul(tmp, c.Phi, gP, kE, kE, kE);
+
+  matmul_nt(c.Phi, P, tmp, kE, kE, kE);      // Phi P^T
+  matmul(gP1, tmp, gPhi, kE, kE, kE);        // G Phi P^T
+  matmul(c.Phi, P, tmp, kE, kE, kE);         // Phi P
+  matmul_tn(gP1, tmp, tmp2, kE, kE, kE);     // G^T Phi P
+  for (int i = 0; i < kE * kE; ++i) gPhi[i] += tmp2[i];
+
+  // Phi = I + F dt; only the state-dependent F blocks carry gradient.
+  T gRSa[9], Sa[9], gSa[9], gSw[9], t3[9];
+  skew(c.ac, Sa);
+  for (int i = 0; i < 3; ++i) {
+    for (int j = 0; j < 3; ++j) {
+      gRSa[3 * i + j] = -gPhi[(3 + i) * kE + 6 + j] * dt;
+      gR[3 * i + j] -= gPhi[(3 + i) * kE + 9 + j] * dt;
+      gSw[3 * i + j] = -gPhi[(6 + i) * kE + 6 + j] * dt;
+    }
+  }
+  matmul_nt(gRSa, Sa, t3, 3, 3, 3);
+  for (int i = 0; i < 9; ++i) gR[i] += t3[i];
+  matmul_tn(c.R, gRSa, gSa, 3, 3, 3);
+  skew_vjp(gSa, gac);
+  skew_vjp(gSw, gwc);
+
+  // Qd accel block R diag(qa) R^T dt and diagonal gyro/bias blocks.
+  for (int i = 0; i < 3; ++i) {
+    for (int j = 0; j < 3; ++j) {
+      T acc = 0;
+      for (int k = 0; k < 3; ++k) {
+        acc += (gP1[(3 + i) * kE + 3 + k] + gP1[(3 + k) * kE + 3 + i]) * c.R[3 * k + j];
+      }
+      gR[3 * i + j] += acc * qc[j] * dt;
+    }
+  }
+  for (int k = 0; k < 3; ++k) {
+    T acc = 0;
+    for (int i = 0; i < 3; ++i) {
+      for (int j = 0; j < 3; ++j) acc += c.R[3 * i + k] * gP1[(3 + i) * kE + 3 + j] * c.R[3 * j + k];
+    }
+    gqc[k] = acc * dt;
+    gqc[3 + k] = gP1[(6 + k) * kE + 6 + k] * dt;
+    gqc[6 + k] = gP1[(9 + k) * kE + 9 + k] * dt;
+    gqc[9 + k] = gP1[(12 + k) * kE + 12 + k] * dt;
+  }
+
+  // R = rot(q / |q|)
+  T gqn[4] = {0, 0, 0, 0};
+  quat_to_rot_vjp(c.qn, gR, gqn);
+  normalize4_vjp(c.qn, c.qnorm, gqn, gx + 6);
+
+  for (int i = 0; i < 3; ++i) {
+    gimu[i] = gac[i];
+    gimu[3 + i] = gwc[i];
+    gx[10 + i] -= gac[i];
+    gx[13 + i] -= gwc[i];
+  }
+}
+
+// Recomputes the forward intermediates, then back-propagates one step.
+template <typename T>
+BEKF_HD inline void step_backward(
+    const T* x, const T* P, const T* imu, const T* z, const T* r, const T* qc, T mask, T dt,
+    const T* gx_out, const T* gP_out, T* gx, T* gP, T* gimu, T* gz, T* gr, T* gqc) {
+  StepCache<T> c;
+  T x_out[kX], P_out[kE * kE];
+  step_forward(x, P, imu, z, r, qc, mask, dt, c, x_out, P_out);
+
+  T gx1[kX], gP1[kE * kE];
+  if (c.update) {
+    update_backward(r, c, gx_out, gP_out, gx1, gP1, gz, gr);
+  } else {
+    copy(gx_out, gx1, kX);
+    copy(gP_out, gP1, kE * kE);
+    fill(gz, 3, T(0));
+    fill(gr, 3, T(0));
+  }
+  predict_backward(x, P, qc, dt, c, gx1, gP1, gx, gP, gimu, gqc);
+}
+
 }  // namespace bekf

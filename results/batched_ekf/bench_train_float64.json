@@ -1,0 +1,62 @@
+{
+  "meta": {
+    "gpu": "NVIDIA GeForce RTX 4070 Laptop GPU",
+    "torch": "2.4.1+cu121"
+  },
+  "rows": [
+    {
+      "backend": "torch_ref_autograd",
+      "dtype": "float64",
+      "n_filters": 64,
+      "steps": 100,
+      "seconds": 2.005503473000317,
+      "filter_steps_per_s": 3191.218607278367,
+      "peak_mem_mb": 102.12646484375
+    },
+    {
+      "backend": "cuda_kernel_fn",
+      "dtype": "float64",
+      "n_filters": 64,
+      "steps": 100,
+      "seconds": 0.26902871199945366,
+      "filter_steps_per_s": 23789.282387126757,
+      "peak_mem_mb": 12.48388671875
+    },
+    {
+      "backend": "torch_ref_autograd",
+      "dtype": "float64",
+      "n_filters": 1024,
+      "steps": 100,
+      "seconds": 1.901629922000211,
+      "filter_steps_per_s": 53848.54267137927,
+      "peak_mem_mb": 1684.1904296875
+    },
+    {
+      "backend": "cuda_kernel_fn",
+      "dtype": "float64",
+      "n_filters": 1024,
+      "steps": 100,
+      "seconds": 0.29146111299996846,
+      "filter_steps_per_s": 351333.3183490968,
+      "peak_mem_mb": 206.0166015625
+    },
+    {
+      "backend": "torch_ref_autograd",
+      "dtype": "float64",
+      "n_filters": 4096,
+      "steps": 100,
+      "seconds": 3.2595816490002107,
+      "filter_steps_per_s": 125660.29758010014,
+      "peak_mem_mb": 6596.4462890625
+    },
+    {
+      "backend": "cuda_kernel_fn",
+      "dtype": "float64",
+      "n_filters": 4096,
+      "steps": 100,
+      "seconds": 1.2961589950000416,
+      "filter_steps_per_s": 316010.61411450285,
+      "peak_mem_mb": 798.9072265625
+    }
+  ]
+}

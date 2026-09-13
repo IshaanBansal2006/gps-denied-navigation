@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 import os
+import time
 from functools import lru_cache
 from pathlib import Path
 from types import ModuleType
@@ -13,6 +14,8 @@ log = logging.getLogger(__name__)
 
 CSRC = Path(__file__).resolve().parent / "csrc"
 DEFAULT_CUDA_HOME = Path.home() / ".local" / "cuda-12.1"
+EXT_NAME = "batched_ekf_ext"
+STALE_LOCK_S = 15 * 60
 
 
 class ExtensionUnavailable(RuntimeError):
@@ -29,6 +32,14 @@ def _resolve_cuda_home() -> Path:
     )
 
 
+def _clear_stale_lock(build_dir: Path) -> None:
+    """A build killed mid-way (e.g. by the OOM killer) leaves a lock that makes load() wait forever."""
+    lock = build_dir / "lock"
+    if lock.exists() and time.time() - lock.stat().st_mtime > STALE_LOCK_S:
+        log.warning("removing stale extension build lock %s (older than %d min)", lock, STALE_LOCK_S // 60)
+        lock.unlink()
+
+
 @lru_cache(maxsize=None)
 def load() -> ModuleType:
     """Build (first call, ~1 min) or load the cached extension."""
@@ -43,10 +54,13 @@ def load() -> ModuleType:
     if "TORCH_CUDA_ARCH_LIST" not in os.environ:
         major, minor = torch.cuda.get_device_capability()
         os.environ["TORCH_CUDA_ARCH_LIST"] = f"{major}.{minor}"
+    # nvcc on the torch headers peaks at ~1.5 GB per job; parallel jobs OOM small WSL/Jetson hosts.
+    os.environ.setdefault("MAX_JOBS", "1")
 
+    _clear_stale_lock(Path(cpp_ext._get_build_directory(EXT_NAME, verbose=False)))
     log.info("building/loading batched_ekf extension (CUDA_HOME=%s)", cuda_home)
     return cpp_ext.load(
-        name="batched_ekf_ext",
+        name=EXT_NAME,
         sources=[str(CSRC / "batched_ekf.cpp"), str(CSRC / "batched_ekf_cuda.cu")],
         extra_include_paths=[str(CSRC)],
         extra_cflags=["-O3"],
