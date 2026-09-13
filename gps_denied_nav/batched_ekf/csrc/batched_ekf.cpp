@@ -9,6 +9,9 @@ void step_forward_cuda(
     const torch::Tensor& z, const torch::Tensor& r, const torch::Tensor& qc,
     const torch::Tensor& mask, double dt, torch::Tensor& x_out, torch::Tensor& P_out);
 
+void step_backward_cuda(const std::vector<torch::Tensor>& in, double dt,
+                        std::vector<torch::Tensor>& out);
+
 namespace {
 
 void check_input(const torch::Tensor& t, const char* name, const torch::Tensor& ref,
@@ -82,8 +85,49 @@ std::vector<torch::Tensor> step_forward(torch::Tensor x, torch::Tensor P, torch:
   return {x_out, P_out};
 }
 
+template <typename T>
+void backward_cpu(const std::vector<torch::Tensor>& in, T dt, std::vector<torch::Tensor>& out) {
+  using bekf::kE;
+  using bekf::kX;
+  std::vector<const T*> ip;
+  std::vector<T*> op;
+  for (const auto& t : in) ip.push_back(t.data_ptr<T>());
+  for (auto& t : out) op.push_back(t.data_ptr<T>());
+  at::parallel_for(0, in[0].size(0), 1, [&](int64_t begin, int64_t end) {
+    for (int64_t i = begin; i < end; ++i) {
+      bekf::step_backward(ip[0] + i * kX, ip[1] + i * kE * kE, ip[2] + i * 6, ip[3] + i * 3,
+                          ip[4] + i * 3, ip[5] + i * 12, ip[6][i], dt, ip[7] + i * kX,
+                          ip[8] + i * kE * kE, op[0] + i * kX, op[1] + i * kE * kE,
+                          op[2] + i * 6, op[3] + i * 3, op[4] + i * 3, op[5] + i * 12);
+    }
+  });
+}
+
+// Returns grads w.r.t. {x, P, imu, z, r, qc}.
+std::vector<torch::Tensor> step_backward(torch::Tensor x, torch::Tensor P, torch::Tensor imu,
+                                         torch::Tensor z, torch::Tensor r, torch::Tensor qc,
+                                         torch::Tensor mask, torch::Tensor gx_out,
+                                         torch::Tensor gP_out, double dt) {
+  check_step_inputs(x, P, imu, z, r, qc, mask);
+  check_input(gx_out, "grad_x_out", x, {bekf::kX});
+  check_input(gP_out, "grad_P_out", x, {bekf::kE, bekf::kE});
+  std::vector<torch::Tensor> in = {x, P, imu, z, r, qc, mask, gx_out, gP_out};
+  std::vector<torch::Tensor> out = {torch::empty_like(x), torch::empty_like(P),
+                                    torch::empty_like(imu), torch::empty_like(z),
+                                    torch::empty_like(r), torch::empty_like(qc)};
+  if (x.is_cuda()) {
+    step_backward_cuda(in, dt, out);
+  } else if (x.dtype() == torch::kFloat64) {
+    backward_cpu<double>(in, dt, out);
+  } else {
+    backward_cpu<float>(in, static_cast<float>(dt), out);
+  }
+  return out;
+}
+
 }  // namespace
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
   m.def("step_forward", &step_forward, "Batched EKF step forward (CPU or CUDA)");
+  m.def("step_backward", &step_backward, "Batched EKF step VJP (CPU or CUDA)");
 }
