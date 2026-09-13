@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import statistics
 import sys
 import time
 from dataclasses import asdict, dataclass
@@ -71,6 +72,9 @@ def main() -> None:
     parser.add_argument("--dtype", choices=["float32", "float64"], default="float32")
     parser.add_argument("--steps", type=int, default=100)
     parser.add_argument("--sizes", type=int, nargs="+", default=[64, 1024, 8192])
+    parser.add_argument("--tag", default="train")
+    parser.add_argument("--repeats", type=int, default=3)
+    parser.add_argument("--backends", nargs="+", default=["torch_ref_autograd", "cuda_kernel_fn"])
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     dtype = getattr(torch, args.dtype)
@@ -78,8 +82,12 @@ def main() -> None:
     rows: List[Row] = []
     for n in args.sizes:
         for name, fn in (("torch_ref_autograd", ekf_step), ("cuda_kernel_fn", ekf_step_cuda)):
+            if name not in args.backends:
+                continue
             try:
-                seconds, mem = measure(fn, n, args.steps, dtype)
+                runs = [measure(fn, n, args.steps, dtype) for _ in range(args.repeats)]
+                seconds = statistics.median(r[0] for r in runs)
+                mem = max(r[1] for r in runs)
             except torch.cuda.OutOfMemoryError:
                 log.warning("%s N=%d OOM at %d steps; skipping", name, n, args.steps)
                 torch.cuda.empty_cache()
@@ -90,7 +98,7 @@ def main() -> None:
             torch.cuda.empty_cache()
 
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    out = RESULTS_DIR / f"bench_train_{args.dtype}.json"
+    out = RESULTS_DIR / f"bench_{args.tag}_{args.dtype}.json"
     meta = {"gpu": torch.cuda.get_device_name(0), "torch": torch.__version__}
     out.write_text(json.dumps({"meta": meta, "rows": [asdict(r) for r in rows]}, indent=2))
     log.info("wrote %s", out)

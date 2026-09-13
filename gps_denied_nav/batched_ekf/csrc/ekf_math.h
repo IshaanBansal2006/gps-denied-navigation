@@ -213,7 +213,9 @@ struct StepCache {
   T dqw[4];
   T q1u[4];
   T q1unorm;
-  T Phi[kE * kE];
+  T B[9];   // R [ac]x;  F[3:6,6:9] = -B
+  T Sw[9];  // [wc]x;    F[6:9,6:9] = -Sw
+  T E[kE * kE];  // Phi P
   T x1[kX];
   T P1[kE * kE];
   // update
@@ -225,8 +227,90 @@ struct StepCache {
   T dq2[4];
   T q2u[4];
   T q2unorm;
-  T A[kE * kE];
+  T AP[kE * kE];  // (I - K H) P1
 };
+
+// Error-state Jacobian F has five nonzero 3x3 blocks:
+//   [0:3,3:6] = I, [3:6,6:9] = -B, [3:6,9:12] = -R, [6:9,6:9] = -Sw, [6:9,12:15] = -I.
+// The four products below apply F without materializing it or Phi = I + F dt.
+
+// out = F X
+template <typename T>
+BEKF_HD inline void f_x(const StepCache<T>& c, const T* X, T* out) {
+  for (int j = 0; j < kE; ++j) {
+    for (int a = 0; a < 3; ++a) {
+      T v = 0, w = 0;
+      for (int b = 0; b < 3; ++b) {
+        v -= c.B[3 * a + b] * X[(6 + b) * kE + j] + c.R[3 * a + b] * X[(9 + b) * kE + j];
+        w -= c.Sw[3 * a + b] * X[(6 + b) * kE + j];
+      }
+      out[a * kE + j] = X[(3 + a) * kE + j];
+      out[(3 + a) * kE + j] = v;
+      out[(6 + a) * kE + j] = w - X[(12 + a) * kE + j];
+    }
+    for (int i = 9; i < kE; ++i) out[i * kE + j] = 0;
+  }
+}
+
+// out = X F^T
+template <typename T>
+BEKF_HD inline void x_ft(const StepCache<T>& c, const T* X, T* out) {
+  for (int i = 0; i < kE; ++i) {
+    const T* xi = X + i * kE;
+    T* oi = out + i * kE;
+    for (int a = 0; a < 3; ++a) {
+      T v = 0, w = 0;
+      for (int b = 0; b < 3; ++b) {
+        v -= c.B[3 * a + b] * xi[6 + b] + c.R[3 * a + b] * xi[9 + b];
+        w -= c.Sw[3 * a + b] * xi[6 + b];
+      }
+      oi[a] = xi[3 + a];
+      oi[3 + a] = v;
+      oi[6 + a] = w - xi[12 + a];
+    }
+    for (int j = 9; j < kE; ++j) oi[j] = 0;
+  }
+}
+
+// out = F^T X
+template <typename T>
+BEKF_HD inline void ft_x(const StepCache<T>& c, const T* X, T* out) {
+  for (int j = 0; j < kE; ++j) {
+    for (int b = 0; b < 3; ++b) {
+      T u = 0, v = 0;
+      for (int a = 0; a < 3; ++a) {
+        u -= c.B[3 * a + b] * X[(3 + a) * kE + j] + c.Sw[3 * a + b] * X[(6 + a) * kE + j];
+        v -= c.R[3 * a + b] * X[(3 + a) * kE + j];
+      }
+      out[b * kE + j] = 0;
+      out[(3 + b) * kE + j] = X[b * kE + j];
+      out[(6 + b) * kE + j] = u;
+      out[(9 + b) * kE + j] = v;
+      out[(12 + b) * kE + j] = -X[(6 + b) * kE + j];
+    }
+  }
+}
+
+// out = X F
+template <typename T>
+BEKF_HD inline void x_f(const StepCache<T>& c, const T* X, T* out) {
+  for (int i = 0; i < kE; ++i) {
+    const T* xi = X + i * kE;
+    T* oi = out + i * kE;
+    for (int b = 0; b < 3; ++b) {
+      T u = 0, v = 0;
+      for (int a = 0; a < 3; ++a) {
+        u -= xi[3 + a] * c.B[3 * a + b] + xi[6 + a] * c.Sw[3 * a + b];
+        v -= xi[3 + a] * c.R[3 * a + b];
+      }
+      oi[b] = 0;
+      oi[3 + b] = xi[b];
+      oi[6 + b] = u;
+      oi[9 + b] = v;
+      oi[12 + b] = -xi[6 + b];
+    }
+  }
+}
 
 template <typename T>
 BEKF_HD inline void predict_forward(
@@ -254,28 +338,17 @@ BEKF_HD inline void predict_forward(
   quat_mul(x + 6, c.dqw, c.q1u);
   c.q1unorm = normalize4(c.q1u, x1 + 6);
 
-  // Phi = I + F dt with F blocks: [0:3,3:6]=I, [3:6,6:9]=-R[ac]x, [3:6,9:12]=-R,
-  // [6:9,6:9]=-[wc]x, [6:9,12:15]=-I.
-  T* Phi = c.Phi;
-  fill(Phi, kE * kE, T(0));
-  for (int i = 0; i < kE; ++i) Phi[i * kE + i] = 1;
-  T Sa[9], RSa[9], Sw[9];
+  T Sa[9];
   skew(c.ac, Sa);
-  skew(c.wc, Sw);
-  matmul(c.R, Sa, RSa, 3, 3, 3);
-  for (int i = 0; i < 3; ++i) {
-    Phi[i * kE + 3 + i] += dt;
-    Phi[(6 + i) * kE + 12 + i] -= dt;
-    for (int j = 0; j < 3; ++j) {
-      Phi[(3 + i) * kE + 6 + j] -= RSa[3 * i + j] * dt;
-      Phi[(3 + i) * kE + 9 + j] -= c.R[3 * i + j] * dt;
-      Phi[(6 + i) * kE + 6 + j] -= Sw[3 * i + j] * dt;
-    }
-  }
+  skew(c.wc, c.Sw);
+  matmul(c.R, Sa, c.B, 3, 3, 3);
 
-  T PhiP[kE * kE];
-  matmul(Phi, P, PhiP, kE, kE, kE);
-  matmul_nt(PhiP, Phi, c.P1, kE, kE, kE);
+  // Phi P Phi^T = E + dt E F^T  with  E = P + dt F P.
+  T tmp[kE * kE];
+  f_x(c, P, tmp);
+  for (int i = 0; i < kE * kE; ++i) c.E[i] = P[i] + dt * tmp[i];
+  x_ft(c, c.E, tmp);
+  for (int i = 0; i < kE * kE; ++i) c.P1[i] = c.E[i] + dt * tmp[i];
 
   // Qd is block diagonal: R diag(qa) R^T dt, then diag(qg|qba|qbg) dt.
   for (int i = 0; i < 3; ++i) {
@@ -320,20 +393,22 @@ BEKF_HD inline void update_forward(
   quat_mul(c.dq2, x1 + 6, c.q2u);
   c.q2unorm = normalize4(c.q2u, x2 + 6);
 
-  // Joseph form: P2 = A P1 A^T + K diag(r) K^T,  A = I - K H.
-  T* A = c.A;
-  fill(A, kE * kE, T(0));
+  // Joseph form with A = I - K H, where H selects the velocity block:
+  //   A P1 = P1 - K P1[3:6,:],   (A P1) A^T = A P1 - (A P1)[:,3:6] K^T.
   for (int i = 0; i < kE; ++i) {
-    A[i * kE + i] = 1;
-    for (int j = 0; j < 3; ++j) A[i * kE + 3 + j] -= c.K[3 * i + j];
-  }
-  T AP[kE * kE];
-  matmul(A, P1, AP, kE, kE, kE);
-  matmul_nt(AP, A, P2, kE, kE, kE);
-  for (int i = 0; i < kE; ++i) {
+    const T* k = c.K + 3 * i;
     for (int j = 0; j < kE; ++j) {
-      P2[i * kE + j] += c.K[3 * i] * r[0] * c.K[3 * j] + c.K[3 * i + 1] * r[1] * c.K[3 * j + 1] +
-                        c.K[3 * i + 2] * r[2] * c.K[3 * j + 2];
+      c.AP[i * kE + j] = P1[i * kE + j] - k[0] * P1[3 * kE + j] - k[1] * P1[4 * kE + j] -
+                         k[2] * P1[5 * kE + j];
+    }
+  }
+  for (int i = 0; i < kE; ++i) {
+    const T* ap = c.AP + i * kE;
+    const T* ki = c.K + 3 * i;
+    for (int j = 0; j < kE; ++j) {
+      const T* kj = c.K + 3 * j;
+      P2[i * kE + j] = ap[j] - ap[3] * kj[0] - ap[4] * kj[1] - ap[5] * kj[2] +
+                       ki[0] * r[0] * kj[0] + ki[1] * r[1] * kj[1] + ki[2] * r[2] * kj[2];
     }
   }
 }
@@ -363,8 +438,8 @@ BEKF_HD inline void update_backward(
     T* gx1, T* gP1, T* gz, T* gr) {
   const T* x1 = c.x1;
   const T* P1 = c.P1;
+  const T* G = gP2;
   fill(gx1, kX, T(0));
-  fill(gP1, kE * kE, T(0));
   fill(gr, 3, T(0));
 
   T gdx[kE];
@@ -399,28 +474,49 @@ BEKF_HD inline void update_backward(
     gx1[3 + i] -= ginnov[i];
   }
 
-  // P2 = A P1 A^T + K Rm K^T
-  T tmp[kE * kE], tmp2[kE * kE], gA[kE * kE];
-  matmul_tn(c.A, gP2, tmp, kE, kE, kE);
-  matmul(tmp, c.A, gP1, kE, kE, kE);
-
-  matmul_nt(c.A, P1, tmp, kE, kE, kE);       // A P1^T
-  matmul(gP2, tmp, gA, kE, kE, kE);          // G A P1^T
-  matmul(c.A, P1, tmp, kE, kE, kE);          // A P1
-  matmul_tn(gP2, tmp, tmp2, kE, kE, kE);     // G^T A P1
-  for (int i = 0; i < kE * kE; ++i) gA[i] += tmp2[i];
-
-  for (int i = 0; i < kE; ++i) {
-    for (int j = 0; j < 3; ++j) {
+  // P2 = A P1 A^T + K Rm K^T.   gP1 = A^T G A  with A^T = I - H^T K^T.
+  T AtG[kE * kE];
+  copy(G, AtG, kE * kE);
+  for (int a = 0; a < 3; ++a) {
+    for (int j = 0; j < kE; ++j) {
       T acc = 0;
-      for (int k = 0; k < kE; ++k) acc += (gP2[i * kE + k] + gP2[k * kE + i]) * c.K[3 * k + j];
-      gK[3 * i + j] += acc * r[j] - gA[i * kE + 3 + j];
+      for (int k = 0; k < kE; ++k) acc += c.K[3 * k + a] * G[k * kE + j];
+      AtG[(3 + a) * kE + j] -= acc;
+    }
+  }
+  for (int i = 0; i < kE; ++i) {
+    const T* row = AtG + i * kE;
+    for (int j = 0; j < kE; ++j) gP1[i * kE + j] = row[j];
+    for (int a = 0; a < 3; ++a) {
+      T acc = 0;
+      for (int k = 0; k < kE; ++k) acc += row[k] * c.K[3 * k + a];
+      gP1[i * kE + 3 + a] -= acc;
+    }
+  }
+
+  // gA = G (A P1^T) + G^T (A P1); only columns 3:6 reach K.
+  for (int j = 0; j < 3; ++j) {
+    T APt_col[kE];
+    for (int k = 0; k < kE; ++k) {
+      APt_col[k] = P1[(3 + j) * kE + k] - c.K[3 * k] * P1[(3 + j) * kE + 3] -
+                   c.K[3 * k + 1] * P1[(3 + j) * kE + 4] - c.K[3 * k + 2] * P1[(3 + j) * kE + 5];
+    }
+    for (int i = 0; i < kE; ++i) {
+      T gA = 0, sym = 0;
+      for (int k = 0; k < kE; ++k) {
+        const T gs = G[i * kE + k] + G[k * kE + i];
+        gA += G[i * kE + k] * APt_col[k] + G[k * kE + i] * c.AP[k * kE + 3 + j];
+        sym += gs * c.K[3 * k + j];
+      }
+      gK[3 * i + j] += sym * r[j] - gA;
     }
   }
   for (int j = 0; j < 3; ++j) {
     T acc = 0;
     for (int i = 0; i < kE; ++i) {
-      for (int k = 0; k < kE; ++k) acc += c.K[3 * i + j] * gP2[i * kE + k] * c.K[3 * k + j];
+      T row = 0;
+      for (int k = 0; k < kE; ++k) row += G[i * kE + k] * c.K[3 * k + j];
+      acc += c.K[3 * i + j] * row;
     }
     gr[j] += acc;
   }
@@ -452,6 +548,7 @@ template <typename T>
 BEKF_HD inline void predict_backward(
     const T* x, const T* P, const T* qc, T dt, const StepCache<T>& c, const T* gx1,
     const T* gP1, T* gx, T* gP, T* gimu, T* gqc) {
+  const T* G = gP1;
   fill(gx, kX, T(0));
   fill(gimu, 6, T(0));
   fill(gqc, 12, T(0));
@@ -481,27 +578,41 @@ BEKF_HD inline void predict_backward(
     }
   }
 
-  // P1 = Phi P Phi^T + Qd
-  T tmp[kE * kE], gPhi[kE * kE], tmp2[kE * kE];
-  matmul_tn(c.Phi, gP1, tmp, kE, kE, kE);
-  matmul(tmp, c.Phi, gP, kE, kE, kE);
+  // gP = Phi^T G Phi = X + dt X F  with  X = G + dt F^T G.
+  T X[kE * kE], tmp[kE * kE];
+  ft_x(c, G, tmp);
+  for (int i = 0; i < kE * kE; ++i) X[i] = G[i] + dt * tmp[i];
+  x_f(c, X, tmp);
+  for (int i = 0; i < kE * kE; ++i) gP[i] = X[i] + dt * tmp[i];
 
-  matmul_nt(c.Phi, P, tmp, kE, kE, kE);      // Phi P^T
-  matmul(gP1, tmp, gPhi, kE, kE, kE);        // G Phi P^T
-  matmul(c.Phi, P, tmp, kE, kE, kE);         // Phi P
-  matmul_tn(gP1, tmp, tmp2, kE, kE, kE);     // G^T Phi P
-  for (int i = 0; i < kE * kE; ++i) gPhi[i] += tmp2[i];
+  // gPhi = G (Phi P^T) + G^T (Phi P); only rows 3:9, cols 6:15 carry state dependence.
+  T Pt[kE * kE], Et[kE * kE];
+  for (int i = 0; i < kE; ++i) {
+    for (int j = 0; j < kE; ++j) Pt[i * kE + j] = P[j * kE + i];
+  }
+  f_x(c, Pt, tmp);
+  for (int i = 0; i < kE * kE; ++i) Et[i] = Pt[i] + dt * tmp[i];
 
-  // Phi = I + F dt; only the state-dependent F blocks carry gradient.
-  T gRSa[9], Sa[9], gSa[9], gSw[9], t3[9];
-  skew(c.ac, Sa);
-  for (int i = 0; i < 3; ++i) {
-    for (int j = 0; j < 3; ++j) {
-      gRSa[3 * i + j] = -gPhi[(3 + i) * kE + 6 + j] * dt;
-      gR[3 * i + j] -= gPhi[(3 + i) * kE + 9 + j] * dt;
-      gSw[3 * i + j] = -gPhi[(6 + i) * kE + 6 + j] * dt;
+  T gRSa[9], gSw[9];
+  for (int a = 0; a < 6; ++a) {
+    const int i = 3 + a;
+    for (int j = 6; j < kE; ++j) {
+      T g = 0;
+      for (int k = 0; k < kE; ++k) g += G[i * kE + k] * Et[k * kE + j] + G[k * kE + i] * c.E[k * kE + j];
+      g *= dt;
+      if (a < 3) {
+        if (j < 9) {
+          gRSa[3 * a + j - 6] = -g;
+        } else if (j < 12) {
+          gR[3 * a + j - 9] -= g;
+        }
+      } else if (j < 9) {
+        gSw[3 * (a - 3) + j - 6] = -g;
+      }
     }
   }
+  T Sa[9], gSa[9], t3[9];
+  skew(c.ac, Sa);
   matmul_nt(gRSa, Sa, t3, 3, 3, 3);
   for (int i = 0; i < 9; ++i) gR[i] += t3[i];
   matmul_tn(c.R, gRSa, gSa, 3, 3, 3);
@@ -513,7 +624,7 @@ BEKF_HD inline void predict_backward(
     for (int j = 0; j < 3; ++j) {
       T acc = 0;
       for (int k = 0; k < 3; ++k) {
-        acc += (gP1[(3 + i) * kE + 3 + k] + gP1[(3 + k) * kE + 3 + i]) * c.R[3 * k + j];
+        acc += (G[(3 + i) * kE + 3 + k] + G[(3 + k) * kE + 3 + i]) * c.R[3 * k + j];
       }
       gR[3 * i + j] += acc * qc[j] * dt;
     }
@@ -521,12 +632,12 @@ BEKF_HD inline void predict_backward(
   for (int k = 0; k < 3; ++k) {
     T acc = 0;
     for (int i = 0; i < 3; ++i) {
-      for (int j = 0; j < 3; ++j) acc += c.R[3 * i + k] * gP1[(3 + i) * kE + 3 + j] * c.R[3 * j + k];
+      for (int j = 0; j < 3; ++j) acc += c.R[3 * i + k] * G[(3 + i) * kE + 3 + j] * c.R[3 * j + k];
     }
     gqc[k] = acc * dt;
-    gqc[3 + k] = gP1[(6 + k) * kE + 6 + k] * dt;
-    gqc[6 + k] = gP1[(9 + k) * kE + 9 + k] * dt;
-    gqc[9 + k] = gP1[(12 + k) * kE + 12 + k] * dt;
+    gqc[3 + k] = G[(6 + k) * kE + 6 + k] * dt;
+    gqc[6 + k] = G[(9 + k) * kE + 9 + k] * dt;
+    gqc[9 + k] = G[(12 + k) * kE + 12 + k] * dt;
   }
 
   // R = rot(q / |q|)

@@ -1,0 +1,73 @@
+{
+  "meta": {
+    "gpu": "NVIDIA GeForce RTX 4070 Laptop GPU",
+    "cpu_threads": 2,
+    "torch": "2.4.1+cu121"
+  },
+  "rows": [
+    {
+      "backend": "cpp_cpu_threads",
+      "dtype": "float32",
+      "n_filters": 64,
+      "steps": 40,
+      "seconds": 0.0010736059994087555,
+      "filter_steps_per_s": 2384487.420347702
+    },
+    {
+      "backend": "cuda_kernel",
+      "dtype": "float32",
+      "n_filters": 64,
+      "steps": 40,
+      "seconds": 0.002711615999942296,
+      "filter_steps_per_s": 944086.4783415046
+    },
+    {
+      "backend": "cpp_cpu_threads",
+      "dtype": "float32",
+      "n_filters": 1024,
+      "steps": 40,
+      "seconds": 0.017653756000072462,
+      "filter_steps_per_s": 2320186.1405488937
+    },
+    {
+      "backend": "cuda_kernel",
+      "dtype": "float32",
+      "n_filters": 1024,
+      "steps": 40,
+      "seconds": 0.004551465999611537,
+      "filter_steps_per_s": 8999298.248849029
+    },
+    {
+      "backend": "cpp_cpu_threads",
+      "dtype": "float32",
+      "n_filters": 16384,
+      "steps": 40,
+      "seconds": 0.31567404300039925,
+      "filter_steps_per_s": 2076065.5319359633
+    },
+    {
+      "backend": "cuda_kernel",
+      "dtype": "float32",
+      "n_filters": 16384,
+      "steps": 40,
+      "seconds": 0.2604535330001454,
+      "filter_steps_per_s": 2516226.1861106493
+    },
+    {
+      "backend": "cpp_cpu_threads",
+      "dtype": "float32",
+      "n_filters": 65536,
+      "steps": 40,
+      "seconds": 1.9526245130000461,
+      "filter_steps_per_s": 1342521.3002024512
+    },
+    {
+      "backend": "cuda_kernel",
+      "dtype": "float32",
+      "n_filters": 65536,
+      "steps": 40,
+      "seconds": 0.14273004699953162,
+      "filter_steps_per_s": 18366420.071371533
+    }
+  ]
+}
