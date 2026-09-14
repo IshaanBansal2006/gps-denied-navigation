@@ -101,13 +101,42 @@ python3 scripts/make_trajectory_animation.py
 python3 scripts/make_baseline_comparison_figure.py
 python3 scripts/make_architecture_diagram.py
 python3 scripts/make_loss_curves_figure.py
+python3 scripts/make_cuda_ekf_figure.py
 ```
+
+---
+
+## GPU-batched differentiable EKF (custom CUDA)
+
+![Batched EKF CUDA benchmark](docs/figures/cuda_ekf_benchmark.png)
+
+The 15-state error-state EKF also exists as a C++/CUDA PyTorch extension: `gps_denied_nav/batched_ekf/`.
+
+- **One GPU thread per filter.** Each thread runs the full predict + velocity-update step on stack arrays. One `__host__ __device__` header also compiles to a multithreaded CPU path.
+- **Hand-derived backward kernel.** Written as closed-form VJPs through the Joseph update, the adjugate 3×3 inverse, the quaternion ops, and a Taylor-switched rotation-vector map. It recomputes the forward pass inside the backward thread, so only the step inputs are saved.
+- **No dense 15×15 products.** Φ = I + F·dt and A = I − KH are applied as block operators.
+- **Validated against PyTorch.** The forward pass matches the NumPy `EKF15` (rtol 1e-9), and gradients match PyTorch autograd (rtol 1e-8, plus `gradcheck`) on both CPU and GPU. Tested on an RTX 4070 Laptop and an RTX 2060.
+
+| float32, RTX 4070 Laptop | PyTorch ops (autograd) | Custom kernel |
+|---|---:|---:|
+| Forward, N = 65,536 filters | 1.5M filter-steps/s | **18.4M** |
+| Training step, N = 8,192, 100-step rollout | 267k filter-steps/s | **4.2M** (16×) |
+| Training peak GPU memory | 6.4 GB | **0.78 GB** (8×) |
+
+```python
+from gps_denied_nav.batched_ekf.function import ekf_step_cuda   # drop-in for batched_ekf.ekf_step
+x, P = ekf_step_cuda(x, P, imu, z, r, qc, mask, dt)             # (N,16), (N,15,15); differentiable
+```
+
+**What training through it found.** `scripts/learn_ekf_noise.py` learns the IMU noise and the LSTM measurement noise by backprop through batched 30-s outages on EuRoC, with selection on MH_04 and reporting on MH_05. The learned EKF improves on the hand-tuned EKF (mean outage error −8 %), but still doesn't beat the velocity-only filter. Gradient descent reached the same conclusion decision 019 reached by hand: the strapdown EKF's IMU propagation isn't trustworthy on this data. Details: decisions [033](docs/decisions/033-differentiable-batched-ekf-cuda.md)–[037](docs/decisions/037-learned-ekf-noise-through-cuda-kernels.md).
+
+Build requirements: an NVIDIA GPU and `nvcc` 12.1 (`scripts/setup_cuda_toolchain.sh` installs it without sudo). The extension JIT-builds on first use, taking about 1 minute.
 
 ---
 
 ## Approach — the decision trail
 
-This project ran 16 model variants, 9 nav-eval studies, and 32 decision docs. The high-leverage moves, in chronological order:
+This project ran 16 model variants, 9 nav-eval studies, and 37 decision docs. The high-leverage moves, in chronological order:
 
 | Decision | What changed | Why it mattered |
 |---|---|---|
@@ -121,6 +150,7 @@ This project ran 16 model variants, 9 nav-eval studies, and 32 decision docs. Th
 | [029](docs/decisions/029-rls-adaptation-head.md) | **RLS adaptation head — closed 30-s final-err 0.403 → 0.259** | Headline. Closes gap to oracle from 4× to 2.5× |
 | [031](docs/decisions/031-ttt-adaptation.md) | Test-time training of the LSTM body | Negative result on in-distribution EuRoC; module shipped for future cross-dataset work |
 | [032](docs/decisions/032-continuous-adaptation.md) | Self-supervised continuous adaptation during outage | Lost on val, won on test by 5 %; flagged val/test conflict honestly |
+| [034](docs/decisions/034-cuda-forward-kernel.md)–[036](docs/decisions/036-sparse-jacobian-kernels.md) | Batched EKF as custom CUDA kernels with a hand-derived backward | 16× faster, 8× less memory than autograd for training through the filter |
 
 Each decision doc contains the hypothesis, the result, and what was learned — including the negative results.
 
@@ -162,11 +192,12 @@ gps-denied-navigation/
 ├── gps_denied_nav/             ← pip-installable package
 │   ├── models/                 (LSTM, TCN regressors)
 │   ├── filters/                (15-state EKF, velocity-only filter)
+│   ├── batched_ekf/            (differentiable batched EKF: PyTorch reference + C++/CUDA kernels)
 │   ├── adaptation/             (RLSHead, TTTAdapter, ContinuousAdapter)
 │   ├── data/                   (EuRoCSequence dataset class)
 │   ├── pipeline.py             (NavPipeline composer)
 │   └── eval.py                 (OutageEvaluator)
-├── tests/                      (23 pytest unit tests — pytest tests/)
+├── tests/                      (pytest unit tests; CUDA kernel tests skip without a GPU)
 ├── scripts/                    (training, nav-eval, figure scripts)
 ├── notebooks/demo.ipynb        (Colab-ready end-to-end demo)
 ├── data/sequences/             (per-sequence imu_aligned.csv)
@@ -174,7 +205,7 @@ gps-denied-navigation/
 ├── results/                    (per-model nav-eval JSONs)
 ├── docs/
 │   ├── decisions/              (dated decision docs)
-│   ├── figures/                (hero, architecture, baseline, loss, GIF)
+│   ├── figures/                (hero, architecture, baseline, loss, GIF, CUDA benchmark)
 │   ├── use-on-your-own-data.md (porting tutorial)
 │   └── roadmap.md              (what I'd build next)
 ├── src/                        (backward-compat shims → gps_denied_nav.*)
@@ -188,7 +219,7 @@ gps-denied-navigation/
 
 ## Stack
 
-Python 3.8+ · PyTorch 2.4 (CUDA 12.1) · NumPy · Pandas · Matplotlib · EuRoC MAV dataset
+Python 3.8+ · PyTorch 2.4 (CUDA 12.1) · custom C++/CUDA extension · NumPy · Pandas · Matplotlib · EuRoC MAV dataset
 
 Trained on a single RTX 2060 (v15) and an RTX 4070 Laptop (v18). Inference runs end-to-end on a laptop CPU.
 
