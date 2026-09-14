@@ -181,6 +181,7 @@ def main() -> None:
     parser.add_argument("--windows-per-seq", type=int, default=8)
     parser.add_argument("--eval-windows", type=int, default=20)
     parser.add_argument("--eval-every", type=int, default=5)
+    parser.add_argument("--tag", default="learned_noise")
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s", datefmt="%H:%M:%S")
 
@@ -223,7 +224,7 @@ def main() -> None:
 
     params.load_state_dict(best["state"])
     report = {
-        "protocol": {"warmup_samples": WARMUP, "outage_samples": OUTAGE, "stride": STRIDE, "sigma_gps": SIGMA_GPS,
+        "protocol": {"gpu": torch.cuda.get_device_name(0), "iters": args.iters, "lr": args.lr, "warmup_samples": WARMUP, "outage_samples": OUTAGE, "stride": STRIDE, "sigma_gps": SIGMA_GPS,
                      "train_windows": train.batch.n, "eval_windows": args.eval_windows, "val_seq": EUROC_VAL_SEQ,
                      "test_seq": EUROC_TEST_SEQ, "test_starts": test.starts, "selected_iter": best["iter"]},
         "learned_params": params.as_dict(),
@@ -240,7 +241,7 @@ def main() -> None:
                      m["final_vel_mean"], m["final_vel_p50"], m["final_vel_p95"], m["mean_vel_mean"])
 
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    out = RESULTS_DIR / "learned_noise.json"
+    out = RESULTS_DIR / f"{args.tag}.json"
     out.write_text(json.dumps(report, indent=2))
     log.info("wrote %s", out)
 
